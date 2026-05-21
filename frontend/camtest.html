@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera Diagnostic</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background:#0f172a; color:#e2e8f0; margin:0; padding:20px; }
+  h1 { font-size:18px; }
+  #log { background:#1e293b; border-radius:8px; padding:12px; font-family:monospace;
+         font-size:12px; white-space:pre-wrap; line-height:1.5; margin:12px 0; }
+  .ok { color:#4ade80; } .err { color:#f87171; } .warn { color:#fbbf24; }
+  button { background:#3b82f6; color:#fff; border:0; border-radius:6px;
+           padding:10px 14px; margin:4px 0; font-size:14px; display:block; width:100%; text-align:left; }
+  video { width:100%; max-width:480px; background:#000; border-radius:8px; margin-top:12px; }
+  #cams { margin:12px 0; }
+</style>
+</head>
+<body>
+<h1>📷 Camera Diagnostic</h1>
+<div id="log">Running checks…</div>
+<div id="cams"></div>
+<video id="v" playsinline muted autoplay></video>
+
+<script>
+const log  = document.getElementById('log');
+const cams = document.getElementById('cams');
+const v    = document.getElementById('v');
+function line(msg, cls){ log.innerHTML += `\n<span class="${cls||''}">${msg}</span>`; }
+
+(async function(){
+  log.textContent = '';
+  line('URL: ' + location.href);
+  line('Secure context (needed for camera): ' + window.isSecureContext,
+       window.isSecureContext ? 'ok' : 'err');
+  if (!window.isSecureContext)
+    line('→ Camera is BLOCKED unless URL is localhost or https.', 'err');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    line('navigator.mediaDevices.getUserMedia is UNAVAILABLE in this browser.', 'err');
+    return;
+  }
+
+  // Permission probe
+  try {
+    line('\nRequesting camera permission…', 'warn');
+    const tmp = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+    tmp.getTracks().forEach(t=>t.stop());
+    line('Permission GRANTED.', 'ok');
+  } catch(e) {
+    line('Permission request FAILED: ' + e.name + ' — ' + e.message, 'err');
+    if (e.name === 'NotAllowedError')
+      line('→ Browser blocked it. Click the camera icon in the address bar → Allow → reload.', 'err');
+    if (e.name === 'NotReadableError')
+      line('→ Camera busy in another app/tab (incl. Iriun preview). Close them, reload.', 'err');
+    return;
+  }
+
+  // Enumerate
+  const devs = (await navigator.mediaDevices.enumerateDevices())
+                 .filter(d => d.kind === 'videoinput');
+  line(`\nFound ${devs.length} camera(s):`, devs.length ? 'ok' : 'err');
+  devs.forEach((d,i) => line(`  [${i}] ${d.label || '(no label — permission issue)'}`));
+
+  const iriun = devs.find(d => /iriun/i.test(d.label));
+  line('\nIriun camera detected: ' + (iriun ? 'YES → ' + iriun.label : 'NO'),
+       iriun ? 'ok' : 'err');
+  if (!iriun)
+    line('→ Iriun virtual camera is not exposed to the browser. ' +
+         'Restart the browser AFTER Iriun desktop app + phone are connected.', 'err');
+
+  // Test buttons
+  devs.forEach(d => {
+    const b = document.createElement('button');
+    b.textContent = '▶ Test: ' + (d.label || d.deviceId.slice(0,12));
+    b.onclick = async () => {
+      line('\nStarting ' + (d.label||d.deviceId) + ' …', 'warn');
+      try {
+        if (v.srcObject) v.srcObject.getTracks().forEach(t=>t.stop());
+        const s = await navigator.mediaDevices.getUserMedia({
+          video:{ deviceId:{ exact:d.deviceId } }, audio:false });
+        v.srcObject = s; await v.play();
+        const tr = s.getVideoTracks()[0];
+        line('LIVE ✓  ' + tr.label + '  ' +
+             JSON.stringify(tr.getSettings().width+'x'+tr.getSettings().height), 'ok');
+      } catch(e) {
+        line('FAILED: ' + e.name + ' — ' + e.message, 'err');
+      }
+    };
+    cams.appendChild(b);
+  });
+  line('\nClick a button above to preview that camera.', 'warn');
+})();
+</script>
+</body>
+</html>

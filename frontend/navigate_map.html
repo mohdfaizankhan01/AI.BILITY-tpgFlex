@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>tpgFlex – Navigate</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, #0d1f3c 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 20%, #1a0a2e 0%, transparent 60%),
+    linear-gradient(135deg, #0a0c14 0%, #080b18 50%, #0c0a14 100%);
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; user-select: none;
+}
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 40px 40px; pointer-events: none;
+}
+
+/* ── Phone frame ───────────────────────────────────────────────────────────── */
+#phone-wrap { width:393px; height:852px; transform-origin:center center; position:relative; flex-shrink:0; }
+#phone {
+  width:393px; height:852px;
+  background: linear-gradient(160deg,#4a4a4c 0%,#1c1c1e 45%,#2a2a2c 100%);
+  border-radius:52px; position:relative;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:
+    0 0 0 1px #6a6a6a, 0 0 0 2.5px #111, inset 0 0 0 1.5px #505052,
+    0 70px 140px rgba(0,0,0,.95), 0 35px 70px rgba(0,0,0,.75),
+    0 10px 30px rgba(0,0,0,.5), 0 0 60px rgba(59,130,246,.08);
+}
+#phone::before {
+  content:''; position:absolute; inset:0; border-radius:52px;
+  background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,transparent 50%);
+  pointer-events:none;
+}
+.hw-btn { position:absolute; background:linear-gradient(to right,#383838,#4e4e4e); border-radius:3px 0 0 3px; box-shadow:-2px 0 0 #0a0a0a,inset -1px 0 2px rgba(255,255,255,.1); }
+.hw-btn.right { background:linear-gradient(to left,#383838,#4e4e4e); border-radius:0 3px 3px 0; box-shadow:2px 0 0 #0a0a0a,inset 1px 0 2px rgba(255,255,255,.1); }
+#btn-mute{left:-4px;top:148px;width:4px;height:28px}
+#btn-vol-up{left:-4px;top:196px;width:4px;height:64px}
+#btn-vol-dn{left:-4px;top:272px;width:4px;height:64px}
+#btn-power{right:-4px;top:210px;width:4px;height:80px}
+
+/* ── Screen ────────────────────────────────────────────────────────────────── */
+#phone-screen {
+  width:371px; height:828px; background:#0a0a0a;
+  border-radius:44px; overflow:hidden; position:relative;
+  display:flex; flex-direction:column;
+}
+
+/* ── Status bar ────────────────────────────────────────────────────────────── */
+#status-bar {
+  height:50px; background:#0a0a0a; display:flex; align-items:center;
+  padding:14px 16px 0; flex-shrink:0; position:relative; z-index:200;
+}
+.sb-time{font-size:15px;font-weight:700;color:#fff}
+#dynamic-island {
+  position:absolute; left:50%; transform:translateX(-50%); top:10px;
+  width:120px; height:34px; background:#000; border-radius:20px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.island-cam{width:10px;height:10px;border-radius:50%;background:#111;border:1px solid #333}
+.island-fi{width:10px;height:10px;border-radius:3px;background:#111;border:1px solid #333}
+.sb-icons{margin-left:auto;display:flex;align-items:center;gap:5px}
+.sig-bar{width:3px;background:#fff;border-radius:1px}
+.battery{display:flex;align-items:center;gap:1px}
+.battery-body{width:22px;height:11px;border:1.5px solid #fff;border-radius:3px;padding:1.5px}
+.battery-fill{height:100%;width:75%;background:#4ade80;border-radius:1.5px}
+.battery-tip{width:2px;height:5px;background:#fff;border-radius:0 1px 1px 0}
+
+/* ── App area ──────────────────────────────────────────────────────────────── */
+#phone-app { flex:1; position:relative; overflow:hidden; }
+
+/* ── Map ───────────────────────────────────────────────────────────────────── */
+#map { position:absolute; inset:0; width:100%; height:100%; }
+.leaflet-control-zoom,.leaflet-control-attribution{display:none!important}
+
+/* ── Top instruction bar ───────────────────────────────────────────────────── */
+#instruction-panel {
+  position:absolute; top:0; left:0; right:0; z-index:500;
+  display:flex; align-items:center; gap:12px;
+  padding:14px 16px 12px; min-height:84px;
+  background:rgba(21,101,192,.95); backdrop-filter:blur(6px);
+  box-shadow:0 4px 24px rgba(0,0,0,.55); transition:background .35s;
+}
+#inst-arrow{font-size:46px;line-height:1;flex-shrink:0;filter:drop-shadow(0 2px 10px rgba(0,0,0,.5))}
+#inst-arrow.pop{animation:arrowPop .35s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arrowPop{from{transform:scale(.35);opacity:0}to{transform:scale(1);opacity:1}}
+#inst-right{flex:1;min-width:0}
+#inst-text{font-size:14px;font-weight:800;color:#fff;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#inst-dist{font-size:26px;font-weight:900;color:#FFD54F;line-height:1.1;margin-top:1px}
+#inst-sub{font-size:10px;color:rgba(255,255,255,.7);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── Accessibility banner ──────────────────────────────────────────────────── */
+#access-banner {
+  position:absolute; top:90px; left:10px; right:10px; z-index:501;
+  border-radius:12px; padding:8px 12px; font-size:11px; font-weight:600;
+  display:none; backdrop-filter:blur(4px);
+}
+#access-banner.visible{display:block}
+
+/* ── Step list drawer ──────────────────────────────────────────────────────── */
+#steps-drawer {
+  position:absolute; left:0; right:0; bottom:0; z-index:490;
+  max-height:0; overflow:hidden; transition:max-height .4s cubic-bezier(.4,0,.2,1);
+  background:rgba(20,20,35,.97); backdrop-filter:blur(8px);
+}
+#steps-drawer.open{max-height:260px}
+#steps-inner{overflow-y:auto;padding:8px 12px 12px;max-height:260px}
+.step-row{
+  display:flex;align-items:flex-start;gap:10px;padding:7px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;color:#64748b;
+}
+.step-row.active{color:#e2e8f0}
+.step-row.done{color:#1e293b;text-decoration:line-through}
+.step-num{
+  flex-shrink:0;width:20px;height:20px;border-radius:50%;background:#1e293b;
+  font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#64748b;
+}
+.step-row.active .step-num{background:#3b82f6;color:#fff}
+.step-d{font-size:10px;color:#475569;margin-top:1px}
+
+/* ── Bottom panel ──────────────────────────────────────────────────────────── */
+#bottom-panel {
+  position:absolute; bottom:0; left:0; right:0; z-index:500;
+  background:rgba(20,20,35,.96); backdrop-filter:blur(8px);
+  border-radius:20px 20px 0 0;
+  padding:12px 14px 10px;
+  box-shadow:0 -4px 24px rgba(0,0,0,.6);
+}
+#dest-name{font-size:11px;color:#64748b;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bottom-row{display:flex;align-items:flex-end;gap:10px;margin-bottom:10px}
+#total-dist{font-size:24px;font-weight:900;color:#fff;line-height:1}
+#total-eta{font-size:13px;color:#94a3b8;padding-bottom:2px}
+#steps-toggle{margin-left:auto;font-size:11px;color:#3b82f6;font-weight:700;cursor:pointer;padding-bottom:2px}
+#bottom-btns{display:flex;gap:8px}
+.nav-btn{
+  flex:1;padding:11px 6px;border:none;border-radius:13px;
+  font-size:12px;font-weight:800;cursor:pointer;color:#fff;
+  display:flex;align-items:center;justify-content:center;gap:4px;
+}
+#btn-repeat{background:#1d4ed8}
+#btn-center{background:#374151}
+#btn-help{background:#dc2626}
+#btn-end{background:#7f1d1d;display:none}
+
+/* ── Re-center floating ────────────────────────────────────────────────────── */
+#btn-recenter{
+  position:absolute;right:12px;bottom:148px;z-index:501;
+  width:38px;height:38px;border-radius:50%;background:#fff;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+  box-shadow:0 2px 12px rgba(0,0,0,.55);
+}
+
+/* ── Stop picker overlay ───────────────────────────────────────────────────── */
+#stop-picker{
+  position:absolute;inset:0;z-index:550;
+  background:rgba(8,10,20,.97);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:20px 18px;gap:14px;
+}
+#stop-picker.hidden{display:none}
+#picker-logo{font-size:32px}
+#picker-title{font-size:16px;font-weight:900;color:#fff;text-align:center;line-height:1.3}
+#picker-sub{font-size:11px;color:#64748b;text-align:center}
+#picker-list{width:100%;display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.stop-card{
+  width:100%;display:flex;align-items:center;gap:12px;
+  padding:13px 14px;border:none;border-radius:14px;
+  background:#1a1d2e;border:1px solid rgba(255,255,255,.08);
+  cursor:pointer;text-align:left;transition:background .15s,border-color .15s;
+}
+.stop-card:hover,.stop-card:active{background:#1e2440;border-color:#3b82f6}
+.stop-card-icon{font-size:22px;flex-shrink:0}
+.stop-card-info{flex:1;min-width:0}
+.stop-card-name{font-size:13px;font-weight:800;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stop-card-dist{font-size:11px;color:#64748b;margin-top:2px}
+.stop-card-arrow{font-size:16px;color:#3b82f6;flex-shrink:0}
+#picker-loading{font-size:13px;color:#64748b;text-align:center}
+
+/* ── Arrived overlay ───────────────────────────────────────────────────────── */
+#arrived-overlay{
+  display:none;position:absolute;inset:0;z-index:600;
+  background:rgba(0,0,0,.9);flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;
+}
+#arrived-overlay.show{display:flex}
+#arrived-icon{font-size:64px}
+#arrived-text{font-size:22px;font-weight:900;color:#4ade80}
+#arrived-sub{font-size:13px;color:#9ca3af;line-height:1.5;white-space:pre-line}
+.arrived-ok{
+  margin-top:8px;padding:12px 28px;background:#22c55e;color:#000;
+  border:none;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;
+}
+
+/* ── GPS dot ───────────────────────────────────────────────────────────────── */
+.gps-pulse{
+  width:20px;height:20px;
+  background:rgba(66,133,244,.3);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  animation:gps 2s ease-out infinite;
+}
+@keyframes gps{0%{transform:scale(1);opacity:1}70%{transform:scale(1.9);opacity:0}100%{transform:scale(1);opacity:0}}
+.gps-inner{width:13px;height:13px;background:#4285F4;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(66,133,244,.6);flex-shrink:0}
+
+/* Home bar */
+#home-bar{height:34px;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:200}
+.home-pill{width:134px;height:5px;background:rgba(255,255,255,.3);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div id="phone-wrap">
+  <div id="phone">
+    <div id="btn-mute"   class="hw-btn"></div>
+    <div id="btn-vol-up" class="hw-btn"></div>
+    <div id="btn-vol-dn" class="hw-btn"></div>
+    <div id="btn-power"  class="hw-btn right"></div>
+
+    <div id="phone-screen">
+
+      <div id="status-bar">
+        <span class="sb-time" id="sb-clock">9:41</span>
+        <div id="dynamic-island">
+          <div class="island-cam"></div>
+          <div class="island-fi"></div>
+        </div>
+        <div class="sb-icons">
+          <div style="display:flex;align-items:flex-end;gap:1.5px;height:12px">
+            <div class="sig-bar" style="height:30%"></div>
+            <div class="sig-bar" style="height:50%"></div>
+            <div class="sig-bar" style="height:70%"></div>
+            <div class="sig-bar" style="height:100%"></div>
+          </div>
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none" style="margin:0 1px">
+            <path d="M7 9.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" fill="white"/>
+            <path d="M3.5 6.7A4.9 4.9 0 0 1 7 5.4c1.3 0 2.5.5 3.5 1.3" stroke="white" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+            <path d="M1 3.9A8.4 8.4 0 0 1 7 1.5c2.3 0 4.4.9 6 2.4" stroke="white" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".6"/>
+          </svg>
+          <div class="battery">
+            <div class="battery-body"><div class="battery-fill"></div></div>
+            <div class="battery-tip"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="phone-app">
+
+        <div id="map"></div>
+
+        <!-- Stop picker (shown when no booking params) -->
+        <div id="stop-picker" class="hidden">
+          <div id="picker-logo">🚌</div>
+          <div id="picker-title">Where do you want to go?</div>
+          <div id="picker-sub">Nearest tpgFlex stops to you</div>
+          <div id="picker-list">
+            <div id="picker-loading">Finding nearby stops…</div>
+          </div>
+        </div>
+
+        <!-- Instruction bar -->
+        <div id="instruction-panel">
+          <div id="inst-arrow">⬆️</div>
+          <div id="inst-right">
+            <div id="inst-text">Getting GPS fix…</div>
+            <div id="inst-dist"></div>
+            <div id="inst-sub"></div>
+          </div>
+        </div>
+
+        <!-- Accessibility banner -->
+        <div id="access-banner"></div>
+
+        <!-- Floating re-center -->
+        <button id="btn-recenter" onclick="recenter()">🎯</button>
+
+        <!-- Step list drawer (slides up) -->
+        <div id="steps-drawer">
+          <div id="steps-inner"></div>
+        </div>
+
+        <!-- Bottom panel -->
+        <div id="bottom-panel">
+          <div id="dest-name">tpgFlex Navigation</div>
+          <div id="bottom-row">
+            <div>
+              <div id="total-dist">— km</div>
+              <div id="total-eta">— min</div>
+            </div>
+            <div id="steps-toggle" onclick="toggleSteps()">▲ Steps</div>
+          </div>
+          <div id="bottom-btns">
+            <button class="nav-btn" id="btn-repeat" onclick="repeatInstruction()">🎤 Repeat</button>
+            <button class="nav-btn" id="btn-center" onclick="recenter()">📍 Center</button>
+            <button class="nav-btn" id="btn-end"    onclick="endNavigation()">✕ End</button>
+            <button class="nav-btn" id="btn-help"   onclick="callHelp()">🆘 Help</button>
+          </div>
+        </div>
+
+        <!-- Arrived -->
+        <div id="arrived-overlay">
+          <div id="arrived-icon">📍</div>
+          <div id="arrived-text">You've arrived!</div>
+          <div id="arrived-sub"></div>
+          <button class="arrived-ok" onclick="document.getElementById('arrived-overlay').classList.remove('show')">OK</button>
+        </div>
+
+      </div><!-- #phone-app -->
+
+      <div id="home-bar"><div class="home-pill"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Phone scaling ─────────────────────────────────────────────────────────────
+function scalePhone() {
+  const wrap  = document.getElementById('phone-wrap');
+  const scale = Math.min((window.innerHeight-24)/852, (window.innerWidth-24)/393, 1);
+  wrap.style.transform  = `scale(${scale})`;
+  wrap.style.marginTop  = `${(852*scale-852)/2}px`;
+  wrap.style.marginLeft = `${(393*scale-393)/2}px`;
+}
+scalePhone();
+window.addEventListener('resize', () => { scalePhone(); setTimeout(()=>map.invalidateSize(),80); });
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function tick() {
+  document.getElementById('sb-clock').textContent =
+    new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});
+}
+tick(); setInterval(tick, 10000);
+
+// ── URL params ────────────────────────────────────────────────────────────────
+const _p     = new URLSearchParams(location.search);
+const pickup  = { name:_p.get('destName'),  lat:parseFloat(_p.get('destLat')),  lng:parseFloat(_p.get('destLng'))  };
+const dropoff = { name:_p.get('finalName'), lat:parseFloat(_p.get('finalLat')), lng:parseFloat(_p.get('finalLng')) };
+const hasPickup  = pickup.name  && !isNaN(pickup.lat);
+const hasDropoff = dropoff.name && !isNaN(dropoff.lat);
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+const profile = localStorage.getItem('tpgflex_profile') || '';
+const isDeaf  = profile === 'deaf';
+const isWheelchair = profile === 'motor-wheelchair' || profile === 'manual-wheelchair';
+
+// Accessibility banner
+const banner = document.getElementById('access-banner');
+if (isDeaf) {
+  banner.style.cssText += ';background:rgba(30,37,53,.92);border:1px solid #3b82f6;color:#93c5fd';
+  banner.textContent = '🔇 Audio muted. Follow the visual arrows and step list.';
+  banner.classList.add('visible');
+} else if (isWheelchair) {
+  banner.style.cssText += ';background:rgba(20,40,20,.92);border:1px solid #4ade80;color:#86efac';
+  const lbl = profile==='motor-wheelchair' ? 'electric wheelchair' : 'manual wheelchair';
+  banner.textContent = `♿ Route for ${lbl} — stops have level-access boarding.`;
+  banner.classList.add('visible');
+}
+
+// ── TTS ───────────────────────────────────────────────────────────────────────
+let lastInstText = '';
+function speak(text, urgent) {
+  if (isDeaf || !window.speechSynthesis) return;
+  if (urgent) window.speechSynthesis.cancel();
+  else if (window.speechSynthesis.speaking) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang='en-US'; u.rate=1.0;
+  window.speechSynthesis.speak(u);
+}
+function repeatInstruction() { if (lastInstText) speak(lastInstText, true); }
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const GENEVA = [46.2044, 6.1432];
+const map = L.map('map', {
+  zoomControl:false, attributionControl:false,
+  center:GENEVA, zoom:16, dragging:true, scrollWheelZoom:false
+});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  { maxZoom:20, subdomains:'abcd' }).addTo(map);
+
+// GPS dot
+const gpsDotIcon = L.divIcon({
+  className:'',
+  html:`<div class="gps-pulse"><div class="gps-inner"></div></div>`,
+  iconSize:[20,20], iconAnchor:[10,10]
+});
+const gpsMarker = L.marker(GENEVA, { icon:gpsDotIcon, zIndexOffset:1000 }).addTo(map);
+
+// Markers
+const pickupIcon  = L.divIcon({ className:'', html:'<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8))">📍</div>', iconSize:[28,28], iconAnchor:[14,28] });
+const dropoffIcon = L.divIcon({ className:'', html:'<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.8))">🏁</div>', iconSize:[28,28], iconAnchor:[14,28] });
+if (hasPickup)  L.marker([pickup.lat,  pickup.lng],  { icon:pickupIcon  }).addTo(map).bindTooltip(pickup.name,  {permanent:false});
+if (hasDropoff) L.marker([dropoff.lat, dropoff.lng], { icon:dropoffIcon }).addTo(map).bindTooltip(dropoff.name, {permanent:false});
+
+let walkLine=null, autoCenter=true;
+map.on('dragstart', ()=>{ autoCenter=false; });
+
+// ── Colors ────────────────────────────────────────────────────────────────────
+const BG = { straight:'#1565C0', sharp:'#E65100', uturn:'#B71C1C', arrive:'#1B5E20' };
+function hexA(hex, a) {
+  const h=hex.replace('#',''), r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function getArrow(t) {
+  const i=t.toLowerCase();
+  if (/sharp left/.test(i))            return { emoji:'↰', bg:BG.sharp    };
+  if (/sharp right/.test(i))           return { emoji:'↱', bg:BG.sharp    };
+  if (/turn left|keep left/.test(i))   return { emoji:'⬅️', bg:BG.straight };
+  if (/turn right|keep right/.test(i)) return { emoji:'➡️', bg:BG.straight };
+  if (/slight left/.test(i))           return { emoji:'↖️', bg:BG.straight };
+  if (/slight right/.test(i))          return { emoji:'↗️', bg:BG.straight };
+  if (/u-turn/.test(i))                return { emoji:'↩️', bg:BG.uturn   };
+  if (/arrived|arrive/.test(i))        return { emoji:'✅', bg:BG.arrive   };
+  if (/roundabout/.test(i))            return { emoji:'🔄', bg:BG.straight };
+  return { emoji:'⬆️', bg:BG.straight };
+}
+function setInstruction(text, dist, sub, crossing) {
+  let emoji, bg;
+  if (crossing) { emoji='🚸'; bg='#E65100'; }
+  else ({ emoji, bg } = getArrow(text));
+  document.getElementById('instruction-panel').style.background = hexA(bg, .95);
+  const a = document.getElementById('inst-arrow');
+  a.textContent = emoji;
+  a.classList.remove('pop'); void a.offsetWidth; a.classList.add('pop');
+  document.getElementById('inst-text').textContent = text;
+  document.getElementById('inst-dist').textContent = dist || '';
+  document.getElementById('inst-sub').textContent  = sub  || '';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDist(m){ return m<1000?`${Math.round(m)} m`:`${(m/1000).toFixed(1)} km`; }
+function fmtEta(s){ const m=Math.round(s/60); return m<60?`${m} min`:`${Math.floor(m/60)}h ${m%60}m`; }
+function haversine(a,b,c,d){
+  const R=6371000, p1=Math.PI/180*a, p2=Math.PI/180*c, dp=Math.PI/180*(c-a), dl=Math.PI/180*(d-b);
+  const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function buildInstruction(s) {
+  const t=s.maneuver?.type||'continue', m=s.maneuver?.modifier||'', st=s.name?` onto ${s.name}`:'';
+  if (t==='depart')  return `Start walking${s.name?' on '+s.name:''}`;
+  if (t==='arrive')  return 'You have arrived';
+  if (t==='turn') {
+    if (m==='left')        return `Turn left${st}`;
+    if (m==='right')       return `Turn right${st}`;
+    if (m==='sharp left')  return `Turn sharp left${st}`;
+    if (m==='sharp right') return `Turn sharp right${st}`;
+    if (m==='slight left') return `Keep left${st}`;
+    if (m==='slight right')return `Keep right${st}`;
+    if (m==='uturn')       return `Make a U-turn${st}`;
+  }
+  if (t==='roundabout'||t==='rotary') return `Take the roundabout${st}`;
+  if (t==='new name')  return `Continue${st}`;
+  if (t==='continue')  return `Continue straight${st}`;
+  if (t==='fork')      return m.includes('left')?`Keep left at the fork${st}`:`Keep right at the fork${st}`;
+  return `Continue${st}`;
+}
+function stepIcon(instr) {
+  if (/left/i.test(instr))       return '↰';
+  if (/right/i.test(instr))      return '↱';
+  if (/roundabout/i.test(instr)) return '🔄';
+  if (/arrive/i.test(instr))     return '✅';
+  return '↑';
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let userLat=null, userLng=null, stepCount=0;
+let routeSteps=[], currentStep=0, isNavigating=false, gpsReady=false;
+
+// ── Step drawer ───────────────────────────────────────────────────────────────
+let drawerOpen=false;
+function toggleSteps() {
+  drawerOpen=!drawerOpen;
+  document.getElementById('steps-drawer').classList.toggle('open', drawerOpen);
+  document.getElementById('steps-toggle').textContent = drawerOpen ? '▼ Steps' : '▲ Steps';
+}
+function renderSteps() {
+  const inner = document.getElementById('steps-inner');
+  inner.innerHTML='';
+  routeSteps.forEach((s,i) => {
+    const d=document.createElement('div');
+    d.className='step-row'+(i===currentStep?' active':i<currentStep?' done':'');
+    d.id=`sr-${i}`;
+    d.innerHTML=`<div class="step-num">${stepIcon(s.instruction)}</div>
+      <div><div>${s.instruction}</div><div class="step-d">${fmtDist(s.distanceMetres)}</div></div>`;
+    inner.appendChild(d);
+  });
+}
+function updateSteps() {
+  document.querySelectorAll('.step-row').forEach((el,i) => {
+    el.className='step-row'+(i===currentStep?' active':i<currentStep?' done':'');
+  });
+  const el=document.getElementById(`sr-${currentStep}`);
+  if (el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+async function startNavigation() {
+  if (!userLat || !pickup.lat || isNaN(pickup.lat)) return;
+  document.getElementById('dest-name').textContent = '→ ' + pickup.name;
+  setInstruction('Finding route…','','Please wait',false);
+  speak(`Starting navigation to ${pickup.name}`, true);
+
+  try {
+    const r = await fetch(`/api/route?from_lat=${userLat}&from_lng=${userLng}&to_lat=${pickup.lat}&to_lng=${pickup.lng}`);
+    const data = await r.json();
+    if (data.error || !data.routes?.length) {
+      setInstruction('Route unavailable','','Check connection',false); return;
+    }
+    const route=data.routes[0], leg=route.legs[0];
+
+    if (walkLine) map.removeLayer(walkLine);
+    const coords=route.geometry.coordinates.map(c=>[c[1],c[0]]);
+    walkLine=L.polyline(coords,{color:'#4285F4',weight:7,opacity:.9,lineJoin:'round',lineCap:'round'}).addTo(map);
+
+    routeSteps=leg.steps.map(s=>({
+      instruction: buildInstruction(s),
+      lat: s.maneuver.location[1],
+      lng: s.maneuver.location[0],
+      distanceMetres: s.distance,
+      isCrossing:   !!s.is_crossing,
+      crossingHint: s.crossing_hint||'',
+      pathHint:     s.path_hint||''
+    }));
+
+    document.getElementById('total-dist').textContent = fmtDist(leg.distance);
+    document.getElementById('total-eta').textContent  = fmtEta(leg.duration);
+
+    currentStep=0; isNavigating=true;
+    document.getElementById('btn-end').style.display = '';
+    renderSteps(); announceStep(0);
+
+    if (walkLine.getBounds().isValid()) {
+      map.fitBounds(walkLine.getBounds(),{padding:[60,60]});
+      setTimeout(()=>{ autoCenter=true; if(userLat) map.setView([userLat,userLng],17); }, 3500);
+    }
+  } catch(e) {
+    setInstruction('Routing failed','','No connection',false);
+  }
+}
+
+function announceStep(i) {
+  if (i>=routeSteps.length) return;
+  const step=routeSteps[i], next=routeSteps[i+1], dist=fmtDist(step.distanceMetres);
+  if (step.isCrossing) {
+    lastInstText=`Caution. ${step.crossingHint} Then ${step.instruction}.`;
+    setInstruction('Cross road carefully', dist, step.instruction, true);
+    speak(lastInstText, true);
+  } else {
+    const sub=step.pathHint||(next?`Then: ${next.instruction}`:'');
+    lastInstText=`${step.instruction} in ${dist}.${step.pathHint?' '+step.pathHint:''}`;
+    setInstruction(step.instruction, dist, sub, false);
+    speak(lastInstText, true);
+  }
+  updateSteps();
+  const rem=routeSteps.slice(i).reduce((s,st)=>s+st.distanceMetres,0);
+  document.getElementById('total-dist').textContent=fmtDist(rem);
+  document.getElementById('total-eta').textContent=fmtEta(rem/1.2);
+}
+
+// ── Proximity check ───────────────────────────────────────────────────────────
+setInterval(()=>{
+  if (!isNavigating||currentStep>=routeSteps.length||!userLat) return;
+  const s=routeSteps[currentStep];
+  if (haversine(userLat,userLng,s.lat,s.lng)<12) {
+    currentStep++;
+    if (currentStep>=routeSteps.length) showArrived();
+    else { navigator.vibrate&&navigator.vibrate([150,80,150]); announceStep(currentStep); }
+  }
+}, 500);
+
+function showArrived() {
+  isNavigating=false;
+  const name=(pickup.name && !isNaN(pickup.lat))?pickup.name:'your stop';
+  const sub=hasDropoff
+    ?`Board your tpgFlex bus at ${name}\nFinal destination: ${dropoff.name}`
+    :name;
+  document.getElementById('arrived-sub').textContent=sub;
+  document.getElementById('arrived-overlay').classList.add('show');
+  navigator.vibrate&&navigator.vibrate([300,100,300,100,300]);
+  speak(`You have arrived at ${name}. ${hasDropoff?'Board the tpgFlex bus.':''}`, true);
+  setInstruction('You have arrived!','',hasDropoff?`Board at ${name}`:'',false);
+}
+
+function endNavigation() {
+  isNavigating = false;
+  routeSteps   = [];
+  currentStep  = 0;
+  if (walkLine) { map.removeLayer(walkLine); walkLine = null; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  document.getElementById('btn-end').style.display = 'none';
+  document.getElementById('steps-inner').innerHTML = '';
+  if (drawerOpen) toggleSteps();
+  document.getElementById('total-dist').textContent = '— km';
+  document.getElementById('total-eta').textContent  = '— min';
+  document.getElementById('dest-name').textContent  = 'tpgFlex Navigation';
+  // Reset pickup so picker works correctly on re-entry
+  pickup.name = null; pickup.lat = NaN; pickup.lng = NaN;
+  // Return to stop picker
+  const lat = userLat || GENEVA[0], lng = userLng || GENEVA[1];
+  showStopPicker(lat, lng);
+}
+
+function callHelp() {
+  speak('Calling for help. Please wait.', true);
+  alert('Help requested. tpgFlex staff will assist you shortly.');
+}
+
+// ── Re-center ─────────────────────────────────────────────────────────────────
+function recenter() { autoCenter=true; if(userLat) map.setView([userLat,userLng],17); }
+
+// ── Stop picker ───────────────────────────────────────────────────────────────
+async function showStopPicker(lat, lng) {
+  document.getElementById('instruction-panel').style.display = 'none';
+  document.getElementById('bottom-panel').style.display = 'none';
+  document.getElementById('btn-recenter').style.display = 'none';
+  document.getElementById('stop-picker').classList.remove('hidden');
+  try {
+    const stops = await fetch(`/api/stops/nearby?lat=${lat}&lng=${lng}`).then(r=>r.json());
+    const list  = document.getElementById('picker-list');
+    list.innerHTML = '';
+    stops.slice(0, 3).forEach((s, i) => {
+      const d   = s.distance_metres < 1000
+        ? `${s.distance_metres} m away`
+        : `${(s.distance_metres/1000).toFixed(1)} km away`;
+      const btn = document.createElement('button');
+      btn.className = 'stop-card';
+      btn.innerHTML = `
+        <div class="stop-card-icon">📍</div>
+        <div class="stop-card-info">
+          <div class="stop-card-name">${s.name}</div>
+          <div class="stop-card-dist">${d}</div>
+        </div>
+        <div class="stop-card-arrow">›</div>`;
+      btn.onclick = () => {
+        document.getElementById('stop-picker').classList.add('hidden');
+        document.getElementById('instruction-panel').style.display = '';
+        document.getElementById('bottom-panel').style.display = '';
+        document.getElementById('btn-recenter').style.display = '';
+        pickup.name = s.name;
+        pickup.lat  = s.latitude;
+        pickup.lng  = s.longitude;
+        startNavigation();
+      };
+      list.appendChild(btn);
+    });
+  } catch(e) {
+    document.getElementById('picker-loading').textContent = 'Could not load nearby stops.';
+  }
+}
+
+// ── GPS ───────────────────────────────────────────────────────────────────────
+navigator.geolocation && navigator.geolocation.watchPosition(
+  pos => {
+    userLat=pos.coords.latitude; userLng=pos.coords.longitude;
+    gpsMarker.setLatLng([userLat,userLng]);
+    if (autoCenter) map.setView([userLat,userLng], map.getZoom()<16?16:map.getZoom());
+    if (!gpsReady) {
+      gpsReady=true; map.setView([userLat,userLng],17);
+      if (hasPickup) startNavigation();
+      else showStopPicker(userLat, userLng);
+    }
+    if (isNavigating && autoCenter) map.setView([userLat,userLng], map.getZoom());
+  },
+  () => {
+    if (!gpsReady) {
+      gpsReady=true; userLat=GENEVA[0]; userLng=GENEVA[1];
+      if (hasPickup) { setInstruction('Demo mode','','GPS unavailable',false); startNavigation(); }
+      else showStopPicker(GENEVA[0], GENEVA[1]);
+    }
+  },
+  { enableHighAccuracy:true, maximumAge:2000 }
+);
+
+// ── Step counter ──────────────────────────────────────────────────────────────
+let accelBuf=[], lastStepTime=0;
+window.DeviceMotionEvent && window.addEventListener('devicemotion', e=>{
+  const a=e.accelerationIncludingGravity; if(!a) return;
+  const mag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
+  accelBuf.push(mag); if(accelBuf.length>5) accelBuf.shift();
+  const avg=accelBuf.reduce((s,v)=>s+v,0)/accelBuf.length, now=Date.now();
+  if (avg>12&&now-lastStepTime>300) { stepCount++; lastStepTime=now; }
+});
+
+setTimeout(()=>map.invalidateSize(),200);
+
+// GPS timeout — if no position in 4 s, fall back to Geneva and proceed
+setTimeout(() => {
+  if (!gpsReady) {
+    gpsReady=true; userLat=GENEVA[0]; userLng=GENEVA[1];
+    gpsMarker.setLatLng(GENEVA); map.setView(GENEVA, 16);
+    if (hasPickup) {
+      setInstruction('Starting (no GPS)','','Demo route from Geneva',false);
+      startNavigation();
+    } else {
+      showStopPicker(GENEVA[0], GENEVA[1]);
+    }
+  }
+}, 4000);
+</script>
+</body>
+</html>
