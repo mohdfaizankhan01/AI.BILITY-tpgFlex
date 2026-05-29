@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tpgFlex – Set Your Profile</title>
+<link rel="stylesheet" href="/static/profile_styles.css">
+<script src="/static/profile_manager.js"></script>
+<style>
+:root {
+  --red:    #e63312;
+  --dark:   #0f1117;
+  --card:   #1a1d27;
+  --card2:  #1e2235;
+  --border: #ffffff12;
+  --green:  #4ade80;
+  --purple: #7c3aed;
+  --muted:  #6b7280;
+  --text:   #e2e8f0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--dark);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header {
+  background: #131620;
+  border-bottom: 2px solid var(--red);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.logo { font-size: 20px; font-weight: 800; }
+.logo span { color: var(--red); }
+#readAloudBtn {
+  margin-left: auto;
+  padding: 6px 14px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#readAloudBtn:hover { border-color: var(--purple); }
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+.progress-wrap {
+  background: #131620;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.progress-steps {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.prog-step {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 99px;
+  transition: background .3s;
+}
+.prog-step.done   { background: var(--green); }
+.prog-step.active { background: var(--purple); }
+.prog-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 6px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── Wizard container ────────────────────────────────────────────────────── */
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px 48px;
+  gap: 0;
+  overflow-y: auto;
+}
+
+.wizard-step {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 680px;
+  gap: 24px;
+}
+.wizard-step.active { display: flex; }
+
+.step-title {
+  font-size: 26px;
+  font-weight: 800;
+  text-align: center;
+}
+.step-subtitle {
+  font-size: 15px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+  margin-top: -14px;
+}
+
+/* ── Profile cards (Step 1) ──────────────────────────────────────────────── */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  width: 100%;
+}
+@media (min-width: 600px) {
+  .profile-grid { grid-template-columns: repeat(3, 1fr); }
+}
+.profile-card {
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  padding: 24px 16px;
+  min-height: 150px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .15s, background .15s, transform .1s;
+  user-select: none;
+  position: relative;
+}
+.profile-card:hover { border-color: var(--purple); background: var(--card2); }
+.profile-card.selected {
+  border-color: var(--green);
+  background: #4ade8010;
+}
+.profile-card .check {
+  position: absolute;
+  top: 10px; right: 12px;
+  font-size: 18px;
+  display: none;
+}
+.profile-card.selected .check { display: block; }
+.profile-card:active { transform: scale(.97); }
+.card-icon { font-size: 40px; }
+.card-label { font-size: 14px; font-weight: 700; }
+
+/* ── Preferences form (Step 2) ───────────────────────────────────────────── */
+.form-grid {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.form-row label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.form-row input[type="text"],
+.form-row input[type="tel"],
+.form-row select {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  min-height: 44px;
+  transition: border-color .15s;
+}
+.form-row input:focus,
+.form-row select:focus { border-color: var(--purple); }
+
+/* Slider */
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.slider-wrap input[type="range"] {
+  flex: 1;
+  accent-color: var(--purple);
+  height: 4px;
+}
+.slider-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* Checkbox toggles */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  min-height: 48px;
+}
+.toggle-row:last-child { border-bottom: none; }
+.toggle-icon { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+.toggle-label { flex: 1; font-size: 14px; }
+.toggle-check {
+  width: 22px; height: 22px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  background: var(--card);
+  transition: background .15s, border-color .15s;
+}
+.toggle-check.on {
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
+}
+
+/* ── Step calibration (Step 3) ───────────────────────────────────────────── */
+.calibrate-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+.calibrate-big-btn {
+  width: 100%;
+  max-width: 400px;
+  min-height: 100px;
+  background: #7c3aed22;
+  border: 2px solid var(--purple);
+  border-radius: 20px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.calibrate-big-btn:hover { background: #7c3aed44; }
+.calibrate-big-btn:disabled { opacity: .4; cursor: default; }
+.calibrate-status {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+  min-height: 20px;
+}
+.calibrate-result {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--green);
+  display: none;
+}
+.step-count-display {
+  font-size: 64px;
+  font-weight: 900;
+  color: var(--purple);
+  min-height: 80px;
+  display: none;
+}
+.step-confirm-row {
+  display: flex;
+  gap: 10px;
+  display: none;
+}
+.step-confirm-row button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--card2);
+  color: var(--text);
+}
+.step-confirm-row button.primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
+}
+
+/* ── Navigation buttons ──────────────────────────────────────────────────── */
+.wizard-nav {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+.btn-back {
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--card2);
+  color: var(--text);
+  cursor: pointer;
+  min-height: 60px;
+}
+.btn-next, .btn-save {
+  flex: 1;
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 800;
+  border: none;
+  background: var(--purple);
+  color: #fff;
+  cursor: pointer;
+  min-height: 60px;
+  transition: opacity .15s;
+}
+.btn-next:disabled, .btn-save:disabled { opacity: .4; cursor: default; }
+.btn-save { background: var(--green); color: #000; font-size: 18px; }
+.btn-skip {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  align-self: center;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span>tpg</span>Flex</div>
+  <span style="font-size:13px;color:#6b7280">Profile Setup</span>
+  <button id="readAloudBtn" onclick="readAloud()" aria-label="Read this page aloud">🔊 Read aloud</button>
+</header>
+
+<!-- Progress indicator -->
+<div class="progress-wrap">
+  <div class="progress-steps">
+    <div class="prog-step active" id="ps1"></div>
+    <div class="prog-step"        id="ps2"></div>
+    <div class="prog-step"        id="ps3"></div>
+    <div class="prog-step"        id="ps4"></div>
+  </div>
+  <div class="prog-label" id="progLabel">Step 1 of 4 — Choose your profile</div>
+</div>
+
+<main>
+
+  <!-- ── Step 1: Profile selection ─────────────────────────────────────── -->
+  <div class="wizard-step active" id="step1" aria-label="Step 1: choose accessibility profile">
+    <h1 class="step-title">Welcome to tpgFlex Accessible Transport</h1>
+    <p class="step-subtitle">Tell us about you so we can personalize every trip, score, and navigation step to your needs.</p>
+
+    <div class="profile-grid" id="profileGrid" role="radiogroup" aria-label="Accessibility profile">
+      <!-- Populated by JS -->
+    </div>
+
+    <div class="wizard-nav">
+      <button class="btn-next" id="btn1next" disabled onclick="goStep(2)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ── Step 2: Preferences ───────────────────────────────────────────── -->
+  <div class="wizard-step" id="step2" aria-label="Step 2: set your preferences">
+    <h2 class="step-title">Your preferences</h2>
+    <p class="step-subtitle">Pre-filled from your profile — adjust anything you like.</p>
+
+    <div class="form-grid">
+
+      <div class="form-row">
+        <label for="displayName">Your name (optional)</label>
+        <input id="displayName" type="text" placeholder="e.g. Marie" aria-label="Display name">
+      </div>
+
+      <div class="form-row">
+        <label for="langSelect">Preferred language</label>
+        <select id="langSelect" aria-label="Preferred language">
+          <option value="fr">Français</option>
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+          <option value="it">Italiano</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label>Voice speed</label>
+        <div class="slider-wrap">
+          <span style="font-size:12px;color:var(--muted)">Slow</span>
+          <input type="range" id="voiceSpeed" min="0.5" max="1.5" step="0.05"
+                 value="1.0" aria-label="Voice speed"
+                 oninput="document.getElementById('voiceSpeedVal').textContent=parseFloat(this.value).toFixed(2)+'×'">
+          <span style="font-size:12px;color:var(--muted)">Fast</span>
+          <span class="slider-val" id="voiceSpeedVal">1.00×</span>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Max walking distance</label>
+        <div class="slider-wrap">
+          <span style="font-size:12px;color:var(--muted)">100m</span>
+          <input type="range" id="walkDist" min="100" max="1000" step="50"
+                 value="500" aria-label="Maximum walking distance in metres"
+                 oninput="document.getElementById('walkDistVal').textContent=this.value+'m'">
+          <span style="font-size:12px;color:var(--muted)">1000m</span>
+          <span class="slider-val" id="walkDistVal">500m</span>
+        </div>
+      </div>
+
+      <div class="form-row" style="gap:0">
+        <label style="margin-bottom:8px">Feedback options</label>
+        <div class="toggle-row" onclick="toggle('highContrast')" role="checkbox" tabindex="0" aria-label="High contrast mode">
+          <span class="toggle-icon">🎨</span>
+          <span class="toggle-label">High contrast mode</span>
+          <div class="toggle-check" id="highContrast">✓</div>
+        </div>
+        <div class="toggle-row" onclick="toggle('largeTxt')" role="checkbox" tabindex="0" aria-label="Large text">
+          <span class="toggle-icon">🔠</span>
+          <span class="toggle-label">Large text</span>
+          <div class="toggle-check" id="largeTxt">✓</div>
+        </div>
+        <div class="toggle-row" onclick="toggle('vibFeedback')" role="checkbox" tabindex="0" aria-label="Vibration feedback">
+          <span class="toggle-icon">📳</span>
+          <span class="toggle-label">Vibration feedback</span>
+          <div class="toggle-check on" id="vibFeedback">✓</div>
+        </div>
+        <div class="toggle-row" onclick="toggle('audFeedback')" role="checkbox" tabindex="0" aria-label="Audio feedback">
+          <span class="toggle-icon">🔊</span>
+          <span class="toggle-label">Audio feedback (text-to-speech)</span>
+          <div class="toggle-check on" id="audFeedback">✓</div>
+        </div>
+        <div class="toggle-row" onclick="toggle('visNotify')" role="checkbox" tabindex="0" aria-label="Visual notifications">
+          <span class="toggle-icon">💬</span>
+          <span class="toggle-label">Visual notifications</span>
+          <div class="toggle-check on" id="visNotify">✓</div>
+        </div>
+        <div class="toggle-row" onclick="toggle('autoAnnounce')" role="checkbox" tabindex="0" aria-label="Auto-announce upcoming stops">
+          <span class="toggle-icon">📣</span>
+          <span class="toggle-label">Auto-announce upcoming stops</span>
+          <div class="toggle-check" id="autoAnnounce">✓</div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label for="emergencyContact">Emergency contact (optional)</label>
+        <input id="emergencyContact" type="tel" placeholder="+41 79 123 45 67"
+               aria-label="Emergency contact phone number">
+      </div>
+
+    </div>
+
+    <div class="wizard-nav">
+      <button class="btn-back" onclick="goStep(1)">← Back</button>
+      <button class="btn-next" onclick="goStep(3)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ── Step 3: Step calibration ──────────────────────────────────────── -->
+  <div class="wizard-step" id="step3" aria-label="Step 3: calibrate your step length">
+    <h2 class="step-title">📏 Calibrate step length</h2>
+    <p class="step-subtitle">Optional — helps navigation estimate your walking distance more accurately.</p>
+
+    <div class="calibrate-wrap">
+      <button class="calibrate-big-btn" id="calibrateBtn" onclick="startCalibration()">
+        <span>📏 Calibrate</span>
+        <span style="font-size:14px;font-weight:400;color:#9ca3af">(walk 10 steps)</span>
+      </button>
+      <div class="step-count-display" id="stepDisplay">0</div>
+      <div class="calibrate-status" id="calibrateStatus">Tap the button, put phone in pocket, walk 10 normal steps.</div>
+      <div class="calibrate-result" id="calibrateResult"></div>
+      <div class="step-confirm-row" id="stepConfirmRow">
+        <button onclick="rejectCalibration()">Try again</button>
+        <button class="primary" onclick="acceptCalibration()">✓ Use this</button>
+      </div>
+    </div>
+
+    <div class="wizard-nav">
+      <button class="btn-back" onclick="goStep(2)">← Back</button>
+      <button class="btn-skip" onclick="goStep(4)">Skip →</button>
+      <button class="btn-next" id="btn3next" onclick="goStep(4)" style="display:none">Next →</button>
+    </div>
+  </div>
+
+  <!-- ── Step 4: Save ───────────────────────────────────────────────────── -->
+  <div class="wizard-step" id="step4" aria-label="Step 4: save your profile">
+    <h2 class="step-title">You're all set! 🎉</h2>
+    <p class="step-subtitle">Your personalized profile is ready. tpgFlex will use it for stop scores, navigation, and all feedback.</p>
+
+    <div id="summaryCard" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;text-align:center">
+      <div id="summaryIcon" style="font-size:56px;margin-bottom:10px">👤</div>
+      <div id="summaryLabel" style="font-size:20px;font-weight:800;">Standard user</div>
+      <div id="summaryName"  style="font-size:14px;color:var(--muted);margin-top:4px"></div>
+    </div>
+
+    <div class="wizard-nav">
+      <button class="btn-back" onclick="goStep(3)">← Back</button>
+      <button class="btn-save" onclick="saveProfile()" id="saveBtn">Save my profile</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+const userId   = window.tpgProfile.getUserId();
+let selectedProfile = null;
+let calibratedStepLen = null;
+let calibrating = false;
+let stepCountInCal = 0;
+let accelListener = null;
+
+// ── Profiles (loaded from API) ─────────────────────────────────────────────
+
+let profileDefs = [];
+
+async function loadProfiles() {
+  const res  = await fetch('/api/profiles/available');
+  profileDefs = await res.json();
+  const grid = document.getElementById('profileGrid');
+  grid.innerHTML = profileDefs.map(p => `
+    <div class="profile-card" role="radio" aria-checked="false" tabindex="0"
+         data-key="${p.key}" onclick="selectProfile('${p.key}')"
+         onkeydown="if(event.key==='Enter'||event.key===' ')selectProfile('${p.key}')">
+      <span class="check">✓</span>
+      <span class="card-icon">${p.icon}</span>
+      <span class="card-label">${p.label}</span>
+    </div>`).join('');
+}
+
+function selectProfile(key) {
+  selectedProfile = key;
+  document.querySelectorAll('.profile-card').forEach(c => {
+    const on = c.dataset.key === key;
+    c.classList.toggle('selected', on);
+    c.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  document.getElementById('btn1next').disabled = false;
+
+  // Pre-fill step 2 with this profile's defaults
+  const def = profileDefs.find(p => p.key === key);
+  if (def) applyProfileDefaults(key);
+
+  // Update step 4 summary
+  if (def) {
+    document.getElementById('summaryIcon').textContent  = def.icon || '👤';
+    document.getElementById('summaryLabel').textContent = def.label;
+  }
+}
+
+async function applyProfileDefaults(key) {
+  // Fetch full profile defaults from the API
+  try {
+    const r = await fetch('/api/profiles/available');
+    // No per-profile defaults endpoint; they're embedded in the PROFILES dict on the server.
+    // We'll apply them by creating a temporary profile and reading it back.
+    // Instead, map known defaults:
+    const DEFAULTS = {
+      standard:    { voice_speed: 1.0,  walkDist: 500, highContrast: false, largeTxt: false, vibFeedback: true, audFeedback: true, visNotify: true, autoAnnounce: false },
+      wheelchair:  { voice_speed: 1.0,  walkDist: 200, highContrast: false, largeTxt: false, vibFeedback: true, audFeedback: true, visNotify: true, autoAnnounce: true  },
+      blind:       { voice_speed: 1.1,  walkDist: 500, highContrast: false, largeTxt: true,  vibFeedback: true, audFeedback: true, visNotify: false, autoAnnounce: true },
+      deaf:        { voice_speed: 1.0,  walkDist: 500, highContrast: false, largeTxt: true,  vibFeedback: true, audFeedback: false, visNotify: true, autoAnnounce: false },
+      low_digital: { voice_speed: 0.9,  walkDist: 500, highContrast: false, largeTxt: true,  vibFeedback: true, audFeedback: true, visNotify: true, autoAnnounce: true  },
+      elderly:     { voice_speed: 0.85, walkDist: 300, highContrast: false, largeTxt: true,  vibFeedback: true, audFeedback: true, visNotify: true, autoAnnounce: false },
+    };
+    const d = DEFAULTS[key] || DEFAULTS.standard;
+    document.getElementById('voiceSpeed').value = d.voice_speed;
+    document.getElementById('voiceSpeedVal').textContent = d.voice_speed.toFixed(2) + '×';
+    document.getElementById('walkDist').value = d.walkDist;
+    document.getElementById('walkDistVal').textContent = d.walkDist + 'm';
+    setToggle('highContrast', d.highContrast);
+    setToggle('largeTxt',     d.largeTxt);
+    setToggle('vibFeedback',  d.vibFeedback);
+    setToggle('audFeedback',  d.audFeedback);
+    setToggle('visNotify',    d.visNotify);
+    setToggle('autoAnnounce', d.autoAnnounce);
+  } catch(_) {}
+}
+
+// ── Wizard navigation ──────────────────────────────────────────────────────
+
+const STEP_LABELS = [
+  'Step 1 of 4 — Choose your profile',
+  'Step 2 of 4 — Set preferences',
+  'Step 3 of 4 — Calibrate step length (optional)',
+  'Step 4 of 4 — Save',
+];
+
+function goStep(n) {
+  document.querySelectorAll('.wizard-step').forEach((el, i) => {
+    el.classList.toggle('active', i + 1 === n);
+  });
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(`ps${i}`);
+    el.classList.toggle('done',   i < n);
+    el.classList.toggle('active', i === n);
+  }
+  document.getElementById('progLabel').textContent = STEP_LABELS[n - 1];
+  window.scrollTo(0, 0);
+}
+
+// ── Toggle checkboxes ──────────────────────────────────────────────────────
+
+function toggle(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on');
+}
+function setToggle(id, on) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on', !!on);
+}
+function isOn(id) {
+  return document.getElementById(id).classList.contains('on');
+}
+
+// ── Read aloud ─────────────────────────────────────────────────────────────
+
+function readAloud() {
+  const active = document.querySelector('.wizard-step.active');
+  if (!active) return;
+  const text = active.innerText.replace(/[✓→←]/g, '');
+  window.tpgProfile.speak(text);
+}
+
+// ── Step calibration ───────────────────────────────────────────────────────
+
+function startCalibration() {
+  if (calibrating) return;
+  calibrating = true;
+  stepCountInCal = 0;
+  document.getElementById('calibrateBtn').disabled = true;
+  document.getElementById('stepDisplay').style.display = 'block';
+  document.getElementById('stepDisplay').textContent = '0';
+  document.getElementById('calibrateStatus').textContent = 'Walking… count your steps. Stop after 10.';
+  document.getElementById('stepConfirmRow').style.display = 'none';
+  document.getElementById('calibrateResult').style.display = 'none';
+
+  // Use DeviceMotion accelerometer to count steps
+  let lastPeak = false;
+  const THRESHOLD = 12; // m/s² delta for step detection
+  let lastMag = 0;
+
+  function onMotion(e) {
+    const a = e.accelerationIncludingGravity;
+    if (!a) return;
+    const mag = Math.sqrt(a.x**2 + a.y**2 + a.z**2);
+    const delta = Math.abs(mag - lastMag);
+    lastMag = mag;
+    const isPeak = delta > THRESHOLD;
+    if (isPeak && !lastPeak) {
+      stepCountInCal++;
+      document.getElementById('stepDisplay').textContent = stepCountInCal;
+      if (navigator.vibrate) navigator.vibrate(30);
+      if (stepCountInCal >= 10) finishCalibration();
+    }
+    lastPeak = isPeak;
+  }
+
+  if (typeof DeviceMotionEvent !== 'undefined') {
+    accelListener = onMotion;
+    window.addEventListener('devicemotion', accelListener);
+  } else {
+    // No accelerometer — simulate with manual input
+    document.getElementById('calibrateStatus').textContent =
+      'Your device has no motion sensor. Enter your step count manually:';
+    document.getElementById('stepConfirmRow').style.display = 'flex';
+    calibrating = false;
+    document.getElementById('calibrateBtn').disabled = false;
+  }
+}
+
+function finishCalibration() {
+  if (accelListener) {
+    window.removeEventListener('devicemotion', accelListener);
+    accelListener = null;
+  }
+  calibrating = false;
+  // We can't get GPS distance here, so use average step length scaled by count
+  const estimated = (0.75 * stepCountInCal / 10).toFixed(2);
+  calibratedStepLen = parseFloat(estimated);
+  document.getElementById('calibrateStatus').textContent =
+    `${stepCountInCal} steps detected. Does this look right?`;
+  document.getElementById('calibrateResult').textContent =
+    `Estimated step length: ${calibratedStepLen} m`;
+  document.getElementById('calibrateResult').style.display = 'block';
+  document.getElementById('stepConfirmRow').style.display = 'flex';
+  document.getElementById('btn3next').style.display = 'block';
+}
+
+function acceptCalibration() {
+  document.getElementById('calibrateStatus').textContent = `✓ Saved — ${calibratedStepLen} m per step`;
+  document.getElementById('stepConfirmRow').style.display = 'none';
+  goStep(4);
+}
+
+function rejectCalibration() {
+  calibratedStepLen = null;
+  document.getElementById('calibrateBtn').disabled = false;
+  document.getElementById('stepDisplay').style.display = 'none';
+  document.getElementById('stepConfirmRow').style.display = 'none';
+  document.getElementById('calibrateResult').style.display = 'none';
+  document.getElementById('calibrateStatus').textContent =
+    'Tap the button, put phone in pocket, walk 10 normal steps.';
+}
+
+// ── Save profile ───────────────────────────────────────────────────────────
+
+async function saveProfile() {
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const name = document.getElementById('displayName').value.trim();
+  const payload = {
+    accessibility_profile:  selectedProfile || 'standard',
+    display_name:           name || null,
+    preferred_language:     document.getElementById('langSelect').value,
+    voice_speed:            parseFloat(document.getElementById('voiceSpeed').value),
+    max_walking_distance:   parseInt(document.getElementById('walkDist').value),
+    high_contrast:          isOn('highContrast'),
+    large_text:             isOn('largeTxt'),
+    haptic_feedback:        isOn('vibFeedback'),
+    audio_feedback:         isOn('audFeedback'),
+    visual_feedback:        isOn('visNotify'),
+    auto_announce_stops:    isOn('autoAnnounce'),
+    emergency_contact:      document.getElementById('emergencyContact').value.trim() || null,
+    step_length_metres:     calibratedStepLen || 0.75,
+    secondary_needs:        [],
+  };
+
+  try {
+    const res = await fetch(`/api/profile/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+
+    // Invalidate cache so other pages pick up the new profile
+    window.tpgProfile.invalidateCache();
+
+    // Update summary display
+    document.getElementById('summaryName').textContent =
+      name ? `Welcome, ${name}!` : 'Profile saved';
+
+    await window.tpgProfile.speak('Profile saved. Welcome to tpgFlex.');
+    await window.tpgProfile.notify('Profile saved!', 'success');
+
+    setTimeout(() => { window.location.href = '/'; }, 1200);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Save my profile';
+    window.tpgProfile.notify('Could not save profile. Please try again.', 'error');
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+loadProfiles();
+</script>
+</body>
+</html>

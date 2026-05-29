@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tpgFlex – Voice Booking</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="/static/profile_styles.css">
+<script src="/static/profile_manager.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --red:    #e63312;
+    --dark:   #0f1117;
+    --card:   #1a1d27;
+    --border: #ffffff12;
+    --green:  #4ade80;
+    --muted:  #6b7280;
+    --text:   #e2e8f0;
+    --user-bubble:  #e63312;
+    --bot-bubble:   #1e2235;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--dark);
+    color: var(--text);
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 380px 1fr 360px;
+    grid-template-rows: 56px 1fr;
+  }
+
+  /* Header */
+  header {
+    grid-column: 1/-1;
+    background: #131620;
+    border-bottom: 2px solid var(--red);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 10px;
+  }
+  .logo { font-size: 20px; font-weight: 800; }
+  .logo span { color: var(--red); }
+  .subtitle { font-size: 12px; color: var(--muted); }
+  .status { margin-left: auto; font-size: 12px; color: var(--green);
+            display: flex; align-items: center; gap: 6px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%;
+         background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* Settings button */
+  #settingsBtn {
+    margin-left: 12px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: #1e2235;
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color .2s;
+    flex-shrink: 0;
+    position: relative;
+  }
+  #settingsBtn:hover { border-color: var(--red); }
+  #profileBadge {
+    position: absolute; top: -4px; right: -4px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--red);
+    border: 2px solid #131620;
+    font-size: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Modal overlay */
+  #settingsModal {
+    display: none;
+    position: fixed; inset: 0;
+    background: #0f1117;
+    z-index: 2000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 24px 16px;
+  }
+  #settingsModal.open { display: flex; }
+  @keyframes onboardingExit {
+    0%   { opacity:1; transform:scale(1)    translateY(0); }
+    100% { opacity:0; transform:scale(1.03) translateY(-12px); }
+  }
+  #settingsModal.closing {
+    animation: onboardingExit .45s cubic-bezier(.4,0,.2,1) forwards;
+    pointer-events: none;
+  }
+
+  /* ═══════════ Premium animated intro ═══════════ */
+  #introScreen {
+    position: fixed; inset: 0;
+    z-index: 3000;
+    background:
+      radial-gradient(ellipse 60% 50% at 28% 22%, #1c1f44 0%, transparent 55%),
+      radial-gradient(ellipse 55% 50% at 78% 78%, #2e1030 0%, transparent 55%),
+      linear-gradient(135deg, #08090f 0%, #0b0d1a 50%, #090714 100%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  #introScreen.exit {
+    animation: introExit .8s cubic-bezier(.65,0,.35,1) forwards;
+    pointer-events: none;
+  }
+  @keyframes introExit {
+    to { opacity: 0; transform: scale(1.07); filter: blur(10px); }
+  }
+  #introScreen::before {
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
+    background-size: 58px 58px;
+    -webkit-mask-image: radial-gradient(ellipse 75% 75% at 50% 48%, #000 28%, transparent 78%);
+            mask-image: radial-gradient(ellipse 75% 75% at 50% 48%, #000 28%, transparent 78%);
+  }
+
+  .intro-orb {
+    position: absolute; border-radius: 50%;
+    filter: blur(70px); opacity: .45;
+    animation: orbFloat 16s ease-in-out infinite;
+  }
+  .intro-orb.a { width:440px; height:440px; background:#e63312; top:-130px; left:-110px; }
+  .intro-orb.b { width:400px; height:400px; background:#3b6ef6; bottom:-150px; right:-90px; animation-delay:-6s; }
+  .intro-orb.c { width:320px; height:320px; background:#7c3aed; top:42%; left:54%; animation-delay:-11s; opacity:.3; }
+  @keyframes orbFloat {
+    0%,100% { transform: translate(0,0) scale(1); }
+    33%     { transform: translate(64px,-46px) scale(1.14); }
+    66%     { transform: translate(-44px,54px) scale(.9); }
+  }
+
+  .intro-content {
+    position: relative; z-index: 2;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px;
+  }
+  .intro-logo {
+    font-size: clamp(46px, 9vw, 88px);
+    font-weight: 900; letter-spacing: -2.5px;
+    color: #f1f5f9;
+    opacity: 0;
+    animation: logoIn 1s cubic-bezier(.22,1,.36,1) .25s forwards;
+    text-shadow: 0 0 60px rgba(230,51,18,.35);
+  }
+  .intro-logo span { color: var(--red); }
+  @keyframes logoIn {
+    from { opacity:0; transform: translateY(34px) scale(.9); filter: blur(12px); }
+    to   { opacity:1; transform: translateY(0)    scale(1);  filter: blur(0); }
+  }
+  .intro-tag {
+    font-size: clamp(11px, 1.5vw, 15px);
+    color: #94a3b8; margin-top: 16px;
+    letter-spacing: 4px; text-transform: uppercase;
+    opacity: 0;
+    animation: introFadeUp .8s ease .95s forwards;
+  }
+
+  .intro-pitch {
+    font-size: clamp(13px, 1.8vw, 17px);
+    color: #cbd5e1; line-height: 1.55;
+    max-width: 460px; margin: 20px auto 0;
+    font-weight: 500;
+    opacity: 0;
+    animation: introFadeUp .8s ease 1.05s forwards;
+  }
+  .intro-pitch b { color: #f1f5f9; font-weight: 700; }
+
+  /* Animated transit route */
+  .intro-route { margin: 30px 0 28px; opacity: 0; animation: introFadeUp .8s ease 1.25s forwards; }
+  .intro-route .track {
+    stroke: #ffffff10; stroke-width: 3; fill: none; stroke-linecap: round;
+  }
+  /* Faint full route, drawn once */
+  .intro-route .base {
+    stroke: url(#routeGrad); stroke-width: 2.5; fill: none; stroke-linecap: round;
+    opacity: .28;
+    stroke-dasharray: 660; stroke-dashoffset: 660;
+    animation: drawRoute 2s cubic-bezier(.65,0,.35,1) 1.5s forwards;
+  }
+  @keyframes drawRoute { to { stroke-dashoffset: 0; } }
+  /* Glowing comet streak that sweeps the route */
+  .intro-route .streak {
+    stroke: url(#routeGrad); stroke-width: 4; fill: none; stroke-linecap: round;
+    filter: url(#streakGlow);
+    stroke-dasharray: 64 660;
+    stroke-dashoffset: 724;
+    animation: cometSweep 2.2s cubic-bezier(.5,0,.5,1) 3s infinite;
+  }
+  @keyframes cometSweep {
+    0%      { stroke-dashoffset: 724; opacity: 0; }
+    8%      { opacity: 1; }
+    70%     { opacity: 1; }
+    82%,100%{ stroke-dashoffset: 60;  opacity: 0; }
+  }
+  .intro-route .stop {
+    fill: #0b0d1a; stroke: #e63312; stroke-width: 3;
+  }
+  /* Pulse rings on the stops */
+  .intro-route .stop-ring {
+    fill: none; stroke: #e63312; stroke-width: 2;
+    transform-box: fill-box; transform-origin: center;
+    animation: stopPulse 2.2s ease-out 3s infinite;
+  }
+  .intro-route .stop-ring.s2 { animation-delay: 3.7s; stroke: #7c52f0; }
+  .intro-route .stop-ring.s3 { animation-delay: 4.4s; stroke: #3b6ef6; }
+  @keyframes stopPulse {
+    0%,40%   { transform: scale(.5); opacity: 0; }
+    48%      { opacity: .9; }
+    70%      { transform: scale(3); opacity: 0; }
+    100%     { transform: scale(3); opacity: 0; }
+  }
+  .intro-route .bus {
+    font-size: 22px;
+    filter: drop-shadow(0 0 8px rgba(255,140,90,.9));
+  }
+  .intro-route .bus2 {
+    font-size: 15px;
+    filter: drop-shadow(0 0 6px rgba(120,170,255,.85));
+  }
+
+  .intro-chips {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    opacity: 0; animation: introFadeUp .8s ease 1.7s forwards;
+  }
+  .intro-chip {
+    font-size: 12px; color: #cbd5e1; font-weight: 600;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(8px);
+    padding: 8px 16px; border-radius: 50px;
+  }
+  .intro-cta {
+    margin-top: 40px;
+    padding: 16px 46px;
+    font-size: 16px; font-weight: 800; letter-spacing: .3px;
+    color: #fff;
+    background: linear-gradient(135deg, #e63312 0%, #ff5d3a 100%);
+    border: none; border-radius: 50px;
+    cursor: pointer;
+    opacity: 0;
+    animation: introFadeUp .8s ease 2.1s forwards, ctaPulse 2.6s ease-in-out 3.2s infinite;
+    box-shadow: 0 14px 44px rgba(230,51,18,.42);
+    transition: transform .15s;
+  }
+  .intro-cta:hover { transform: translateY(-2px) scale(1.02); }
+  .intro-cta:active { transform: scale(.97); }
+  @keyframes ctaPulse {
+    0%,100% { box-shadow: 0 14px 44px rgba(230,51,18,.42); }
+    50%     { box-shadow: 0 18px 60px rgba(230,51,18,.62); }
+  }
+  .intro-foot {
+    position: absolute; bottom: 28px; left: 0; right: 0;
+    text-align: center;
+    font-size: 11px; color: #475569; letter-spacing: 2px;
+    opacity: 0; animation: introFadeUp .8s ease 2.4s forwards;
+  }
+  @keyframes introFadeUp {
+    from { opacity: 0; transform: translateY(22px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .intro-orb, .intro-route .line, .intro-cta { animation: none !important; }
+    .intro-logo, .intro-tag, .intro-pitch, .intro-chips, .intro-cta, .intro-foot { opacity: 1 !important; }
+  }
+
+  /* Brand header inside the onboarding screen */
+  .ob-brand {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .ob-logo {
+    font-size: 32px; font-weight: 900; letter-spacing: -.5px;
+  }
+  .ob-logo span { color: var(--red); }
+  .ob-tagline {
+    font-size: 13px; color: var(--muted); margin-top: 4px;
+  }
+
+  /* Quick-continue chip (returning users) */
+  .ob-continue {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #1e2235;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    width: 100%;
+    cursor: pointer;
+    transition: border-color .2s;
+  }
+  .ob-continue:hover { border-color: var(--red); }
+  .ob-continue-icon { font-size: 24px; }
+  .ob-continue-text { flex: 1; text-align: left; }
+  .ob-continue-title { font-size: 13px; font-weight: 700; }
+  .ob-continue-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .ob-continue-arrow { font-size: 18px; color: var(--muted); }
+  .ob-or {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .modal-box {
+    background: transparent;
+    border: none;
+    padding: 0;
+    width: 520px;
+    max-width: 100%;
+  }
+  .modal-title {
+    font-size: clamp(26px, 4vw, 34px);
+    font-weight: 900; letter-spacing: -.8px;
+    margin-bottom: 10px; color: #f1f5f9;
+    line-height: 1.15;
+  }
+  .modal-title span {
+    color: var(--red);
+    background: linear-gradient(135deg,#e63312 0%,#ff6b45 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .modal-sub {
+    font-size: 15px; color: #94a3b8;
+    margin-bottom: 24px; line-height: 1.6;
+    max-width: 440px;
+  }
+  .modal-sub b { color: #cbd5e1; font-weight: 600; }
+
+  /* Profile cards grid */
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .profile-card {
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 14px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .2s, background .2s;
+    background: #131620;
+    user-select: none;
+  }
+  .profile-card:hover { border-color: #ffffff30; background: #1e2235; }
+  .profile-card.selected {
+    border-color: var(--red);
+    background: #2a0f0a;
+  }
+  .profile-card .icon { font-size: 36px; margin-bottom: 8px; }
+  .profile-card .label {
+    font-size: 13px; font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .profile-card .desc {
+    font-size: 11.5px; color: #94a3b8; line-height: 1.5;
+  }
+  .profile-card.selected .desc { color: #d1a090; }
+
+  .modal-save {
+    width: 100%;
+    padding: 13px;
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  .modal-save:disabled { opacity: .4; cursor: default; }
+  .modal-save:not(:disabled):hover { opacity: .88; }
+
+  /* Active profile chip in header */
+  #profileChip {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    background: #2a0f0a;
+    border: 1px solid var(--red);
+    border-radius: 20px;
+    padding: 3px 10px;
+    color: var(--red);
+    font-weight: 600;
+    margin-left: 8px;
+    cursor: pointer;
+  }
+  #profileChip.visible { display: flex; }
+
+  /* Left panel */
+  aside {
+    background: var(--card);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  /* Chat window */
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #chat::-webkit-scrollbar { width: 4px; }
+  #chat::-webkit-scrollbar-thumb { background: #ffffff20; border-radius: 4px; }
+
+  .bubble {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .bubble.bot {
+    background: var(--bot-bubble);
+    border: 1px solid var(--border);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .bubble.user {
+    background: var(--user-bubble);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+  .bubble.typing {
+    background: var(--bot-bubble);
+    border: 1px solid var(--border);
+    align-self: flex-start;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 13px;
+  }
+
+  /* Booking card inside chat */
+  .booking-card {
+    background: #0f1a0f;
+    border: 1px solid var(--green);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+    align-self: flex-start;
+    max-width: 90%;
+  }
+  .booking-card .card-title {
+    color: var(--green);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .booking-card .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #ffffff08;
+    gap: 16px;
+  }
+  .booking-card .row:last-child { border: none; }
+  .booking-card .label { color: var(--muted); }
+  .booking-card .value { font-weight: 600; }
+  .badge {
+    background: var(--green); color: #000;
+    border-radius: 20px; padding: 1px 8px;
+    font-size: 11px; font-weight: 700;
+  }
+
+  /* Ramp request row inside booking card */
+  .ramp-row {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #1a1f0e;
+    border: 1px solid #3d5c1a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    transition: background .4s, border-color .4s;
+  }
+  .ramp-row.acknowledged {
+    background: #0f2a0f;
+    border-color: var(--green);
+  }
+  .ramp-icon { font-size: 20px; flex-shrink: 0; }
+  .ramp-info { flex: 1; }
+  .ramp-title { font-weight: 700; font-size: 12px; color: #a3c45a; }
+  .ramp-row.acknowledged .ramp-title { color: var(--green); }
+  .ramp-status {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .ramp-badge {
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    background: #3d5c1a;
+    color: #a3c45a;
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+  }
+  .ramp-badge.confirmed {
+    background: #14532d;
+    color: var(--green);
+    animation: none;
+  }
+
+  /* Input bar */
+  .input-bar {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: #131620;
+  }
+  #micBtn {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: none;
+    background: var(--red);
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all .2s;
+  }
+  #micBtn.listening {
+    background: #c0392b;
+    animation: ripple 1.2s infinite;
+  }
+  @keyframes ripple {
+    0%  { box-shadow: 0 0 0 0 rgba(230,51,18,.6); }
+    70% { box-shadow: 0 0 0 14px rgba(230,51,18,0); }
+    100%{ box-shadow: 0 0 0 0 rgba(230,51,18,0); }
+  }
+  #textInput {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: #1e2235;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+  #textInput:focus { border-color: var(--red); }
+  #sendBtn {
+    padding: 10px 16px;
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #sendBtn:disabled { opacity: .5; cursor: default; }
+
+  /* New conversation button */
+  .new-chat-btn {
+    margin: 8px 12px 0;
+    padding: 7px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all .2s;
+  }
+  .new-chat-btn:hover { border-color: var(--red); color: var(--red); }
+
+  /* Map */
+  #map { width: 100%; height: 100%; }
+
+  /* ═══════════ Premium Interactions ═══════════ */
+
+  /* Chat bubble slide-in */
+  @keyframes bubbleIn {
+    from { opacity:0; transform:translateY(14px) scale(.97); }
+    to   { opacity:1; transform:translateY(0) scale(1); }
+  }
+  .bubble { animation: bubbleIn .28s cubic-bezier(.22,1,.36,1) both; }
+
+  /* Animated typing dots */
+  .td-wrap { display:flex; align-items:center; gap:5px; padding:3px 0; }
+  .td { width:8px; height:8px; border-radius:50%; background:#475569;
+        animation:tdPop .9s ease-in-out infinite; }
+  .td:nth-child(2) { animation-delay:.15s; }
+  .td:nth-child(3) { animation-delay:.30s; }
+  @keyframes tdPop { 0%,80%,100%{transform:scale(.65);opacity:.4} 40%{transform:scale(1);opacity:1} }
+
+  /* Voice waveform visualizer */
+  #voice-viz {
+    display:none; position:absolute; bottom:52px; left:50%;
+    transform:translateX(-50%);
+    align-items:flex-end; gap:3px; height:32px;
+    background:rgba(15,17,23,.9); backdrop-filter:blur(8px);
+    padding:5px 8px; border-radius:12px;
+    border:1px solid rgba(230,51,18,.3);
+    box-shadow:0 4px 20px rgba(230,51,18,.2);
+  }
+  #voice-viz.on { display:flex; animation:vzIn .2s ease both; }
+  @keyframes vzIn {
+    from{opacity:0;transform:translateX(-50%) translateY(6px)}
+    to  {opacity:1;transform:translateX(-50%) translateY(0)}
+  }
+  .vbar { width:4px; border-radius:3px;
+          background:linear-gradient(to top,#e63312,#ff8c69);
+          animation:vPulse .75s ease-in-out infinite; }
+  .vbar:nth-child(1){height:10px;animation-delay:0s}
+  .vbar:nth-child(2){height:20px;animation-delay:.11s}
+  .vbar:nth-child(3){height:28px;animation-delay:.22s}
+  .vbar:nth-child(4){height:20px;animation-delay:.33s}
+  .vbar:nth-child(5){height:10px;animation-delay:.44s}
+  @keyframes vPulse { 0%,100%{transform:scaleY(.4);opacity:.55} 50%{transform:scaleY(1);opacity:1} }
+
+  /* Mic button states */
+  #micBtn.listening {
+    box-shadow:0 0 0 6px rgba(230,51,18,.22),0 0 28px rgba(230,51,18,.45) !important;
+  }
+  #micBtn.thinking {
+    background:#3b82f6 !important;
+    animation:thinkSpin .9s linear infinite !important;
+  }
+  #micBtn.speaking {
+    background:#7c3aed !important;
+    animation:speakGlow 1.1s ease-in-out infinite !important;
+  }
+  @keyframes thinkSpin { to{transform:rotate(360deg)} }
+  @keyframes speakGlow {
+    0%,100%{box-shadow:0 0 14px rgba(124,58,237,.35)}
+    50%    {box-shadow:0 0 34px rgba(124,58,237,.7)}
+  }
+
+  /* Input bar glassmorphism */
+  .input-bar {
+    background:rgba(19,22,32,.88) !important;
+    backdrop-filter:blur(14px);
+    border-top:1px solid rgba(255,255,255,.07) !important;
+  }
+
+  /* Booking card premium reveal */
+  @keyframes bookingReveal {
+    from { opacity:0; transform:translateY(20px) scale(.95); }
+    to   { opacity:1; transform:translateY(0) scale(1); }
+  }
+  .booking-card {
+    animation: bookingReveal .5s cubic-bezier(.22,1,.36,1) both;
+    background: linear-gradient(145deg,#0b1c0f 0%,#0f1f18 100%) !important;
+    border-radius:16px !important;
+    backdrop-filter:blur(10px);
+    box-shadow:0 8px 32px rgba(0,0,0,.4);
+  }
+
+  /* ETA strip */
+  .eta-strip {
+    display:flex; align-items:center; gap:10px;
+    background:rgba(0,0,0,.3); border:1px solid rgba(74,222,128,.2);
+    border-radius:10px; padding:10px 12px; margin-top:10px;
+  }
+  .eta-pulse { width:9px; height:9px; border-radius:50%; background:#4ade80;
+               flex-shrink:0; animation:pulse 1.4s infinite; }
+  .eta-time  { font-size:22px; font-weight:900; color:#4ade80; line-height:1; flex-shrink:0; }
+  .eta-info  { flex:1; min-width:0; }
+  .eta-head  { font-size:12px; font-weight:700; color:#e2e8f0; }
+  .eta-label { font-size:10px; color:#64748b; margin-top:1px; }
+  .eta-bar-wrap { height:3px; background:#1a3a1a; border-radius:3px; margin-top:8px; overflow:hidden; }
+  .eta-bar  { height:100%; background:linear-gradient(to right,#22c55e,#86efac);
+              border-radius:3px; width:4%; transition:width 1s linear; }
+
+  /* Status timeline */
+  .status-row { display:flex; align-items:center; margin-top:10px; }
+  .st-node { display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .st-circ {
+    width:11px; height:11px; border-radius:50%;
+    background:#1e293b; border:2px solid #334155;
+    flex-shrink:0; transition:all .5s;
+  }
+  .st-circ.done   { background:#22c55e; border-color:#22c55e; }
+  .st-circ.active { background:#e63312; border-color:#e63312;
+                    box-shadow:0 0 8px rgba(230,51,18,.5); animation:pulse 1.5s infinite; }
+  .st-connector { flex:1; height:2px; background:#1e293b; transition:background .5s; }
+  .st-connector.done { background:#22c55e; }
+  .st-lbl { font-size:9px; color:#475569; text-align:center; white-space:nowrap; margin-top:2px; }
+
+  /* Profile card stagger */
+  @keyframes cardReveal {
+    from { opacity:0; transform:translateY(14px) scale(.97); }
+    to   { opacity:1; transform:translateY(0) scale(1); }
+  }
+  .profile-card.stagger { animation:cardReveal .4s cubic-bezier(.22,1,.36,1) both; }
+  .profile-card:hover { transform:translateY(-2px); box-shadow:0 4px 20px rgba(0,0,0,.3); }
+
+  /* ═══════════ Quick (tap-to-book) panel ═══════════ */
+  #quickbook {
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .qb-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); }
+  .qb-title { font-size: 17px; font-weight: 900; }
+  .qb-title span { color: var(--red); }
+  .qb-sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .qb-body { flex: 1; overflow-y: auto; padding: 14px; }
+  .qb-body::-webkit-scrollbar { width: 4px; }
+  .qb-body::-webkit-scrollbar-thumb { background: #ffffff20; border-radius: 4px; }
+  .qb-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: relative; }
+  #qb-link {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 6; overflow: visible;
+  }
+  .qb-link-path {
+    stroke: url(#qbGrad); stroke-width: 5; fill: none;
+    stroke-linecap: round; stroke-dasharray: 9 8;
+    filter: drop-shadow(0 0 7px rgba(248,113,113,.75));
+    animation: qbDash .8s linear infinite;
+  }
+  @keyframes qbDash { to { stroke-dashoffset: -17; } }
+  .qb-link-dot { display: none; }
+  .qb-link-dot.show { display: block; }
+  .qb-link-dot.p { fill: #4ade80; filter: drop-shadow(0 0 6px rgba(74,222,128,.9)); }
+  .qb-link-dot.d { fill: #f87171; filter: drop-shadow(0 0 6px rgba(248,113,113,.9)); }
+  .qb-col-head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .6px; margin-bottom: 10px;
+  }
+  .qb-col-head.pick { color: #4ade80; }
+  .qb-col-head.drop { color: #f87171; }
+  .qb-list { display: flex; flex-direction: column; gap: 9px; }
+  .qb-stop {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 16px 6px; border-radius: 14px;
+    background: #131620; border: 2px solid var(--border);
+    cursor: pointer; text-align: center; user-select: none;
+    transition: border-color .15s, background .15s, transform .1s;
+  }
+  .qb-stop:hover  { background: #1e2235; }
+  .qb-stop:active { transform: scale(.95); }
+  .qb-stop .qb-ic { font-size: 28px; line-height: 1; }
+  .qb-stop .qb-nm { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+  .qb-stop .qb-chk {
+    display: none; font-size: 10px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .qb-stop.sel-pick { border-color: #4ade80; background: #0e2417; }
+  .qb-stop.sel-drop { border-color: #f87171; background: #2a1010; }
+  .qb-stop.sel-pick .qb-chk { display: block; color: #4ade80; }
+  .qb-stop.sel-drop .qb-chk { display: block; color: #f87171; }
+
+  .qb-when { margin-top: 20px; }
+  .qb-when-label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .6px; color: var(--muted); margin-bottom: 10px;
+  }
+  .qb-times { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .qb-time {
+    padding: 14px 6px; border-radius: 12px;
+    background: #131620; border: 2px solid var(--border);
+    cursor: pointer; text-align: center;
+    font-size: 14px; font-weight: 700; user-select: none;
+    transition: border-color .15s, background .15s;
+  }
+  .qb-time:hover { background: #1e2235; }
+  .qb-time.sel { border-color: var(--red); background: #2a0f0a; color: #ff8c69; }
+
+  .qb-foot { padding: 14px; border-top: 1px solid var(--border); }
+  .qb-summary {
+    font-size: 12px; color: var(--muted);
+    text-align: center; margin-bottom: 12px; min-height: 16px;
+  }
+  .qb-summary b { color: var(--text); }
+  .qb-book {
+    width: 100%; padding: 17px;
+    background: var(--red); color: #fff;
+    border: none; border-radius: 14px;
+    font-size: 16px; font-weight: 800;
+    cursor: pointer; transition: opacity .2s, transform .1s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .qb-book:not(:disabled):hover  { opacity: .9; }
+  .qb-book:not(:disabled):active { transform: scale(.98); }
+  .qb-book:disabled { opacity: .3; cursor: default; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ Premium animated intro ═══════════ -->
+<div id="introScreen">
+  <div class="intro-orb a"></div>
+  <div class="intro-orb b"></div>
+  <div class="intro-orb c"></div>
+
+  <div class="intro-content">
+    <div class="intro-logo"><span>tpg</span>Flex</div>
+    <div class="intro-tag">AI Voice Booking · Geneva Public Transport</div>
+
+    <div class="intro-pitch">
+      Book a <b>shared on-demand ride</b> by voice — tpgFlex routes a vehicle
+      to you and adapts to your needs, every day from <b>6 AM to midnight</b>.
+    </div>
+
+    <div class="intro-route">
+      <svg width="340" height="100" viewBox="0 0 340 100" fill="none">
+        <defs>
+          <linearGradient id="routeGrad" x1="0" y1="0" x2="340" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#e63312"/>
+            <stop offset=".5" stop-color="#a23bd6"/>
+            <stop offset="1" stop-color="#3b6ef6"/>
+          </linearGradient>
+          <filter id="streakGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3.5" result="b"/>
+            <feMerge>
+              <feMergeNode in="b"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+
+        <path class="track" d="M22 74 C 92 74, 104 26, 170 26 S 252 74, 318 74"/>
+        <path class="base"  d="M22 74 C 92 74, 104 26, 170 26 S 252 74, 318 74"/>
+        <path class="streak" id="introPath" d="M22 74 C 92 74, 104 26, 170 26 S 252 74, 318 74"/>
+
+        <circle class="stop-ring"    cx="22"  cy="74" r="6"/>
+        <circle class="stop-ring s2" cx="170" cy="26" r="6"/>
+        <circle class="stop-ring s3" cx="318" cy="74" r="6"/>
+        <circle class="stop" cx="22"  cy="74" r="5"/>
+        <circle class="stop" cx="170" cy="26" r="5"/>
+        <circle class="stop" cx="318" cy="74" r="5"/>
+
+        <text class="bus" x="-11" y="-7" text-anchor="middle" opacity="0">🚐
+          <animateMotion id="busMotion" dur="2.2s" begin="3s" repeatCount="indefinite"
+                         rotate="auto" keyPoints="0;0;1;1" keyTimes="0;0.08;0.82;1"
+                         calcMode="spline" keySplines="0 0 1 1;.5 0 .5 1;0 0 1 1">
+            <mpath href="#introPath"/>
+          </animateMotion>
+          <animate attributeName="opacity"
+                   values="0;0;1;1;0;0" keyTimes="0;0.06;0.12;0.74;0.82;1"
+                   dur="2.2s" begin="3s" repeatCount="indefinite"/>
+        </text>
+
+        <!-- Smaller bus, opposite direction -->
+        <text class="bus2" x="-8" y="-5" text-anchor="middle" opacity="0">🚌
+          <animateMotion dur="2.8s" begin="4.4s" repeatCount="indefinite"
+                         rotate="auto" keyPoints="1;1;0;0" keyTimes="0;0.08;0.84;1"
+                         calcMode="spline" keySplines="0 0 1 1;.45 0 .55 1;0 0 1 1">
+            <mpath href="#introPath"/>
+          </animateMotion>
+          <animate attributeName="opacity"
+                   values="0;0;1;1;0;0" keyTimes="0;0.06;0.13;0.76;0.84;1"
+                   dur="2.8s" begin="4.4s" repeatCount="indefinite"/>
+        </text>
+      </svg>
+    </div>
+
+    <div class="intro-chips">
+      <div class="intro-chip">🎙️ Voice booking</div>
+      <div class="intro-chip">♿ Accessible by design</div>
+      <div class="intro-chip">🧭 Live navigation</div>
+    </div>
+
+    <button class="intro-cta" onclick="enterApp()">Get Started →</button>
+  </div>
+
+  <div class="intro-foot">DESIGNED FOR EVERYONE · GENEVA 2026</div>
+</div>
+
+<header>
+  <div class="logo"><span>tpg</span>Flex</div>
+  <div class="subtitle">AI Voice Booking</div>
+  <div class="status"><div class="dot"></div>Live · 06:00–24:00</div>
+  <div id="profileChip" onclick="openSettings()"></div>
+  <button style="margin-left:16px;padding:6px 14px;background:#16a34a;color:white;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;">📞 Call Customer Care</button>
+  <button onclick="openNavigate()" style="margin-left:8px;padding:6px 14px;background:#3b82f6;color:white;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;">🧭 Navigate</button>
+  <a href="/static/driver_panel.html" target="_blank" style="margin-left:8px;padding:6px 14px;background:#f59e0b;color:#000;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">🚐 Driver</a>
+  <a href="/static/stop_evaluator.html" target="_blank" style="margin-left:8px;padding:6px 14px;background:#7c3aed;color:white;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">🚏 Evaluate Stops</a>
+  <a href="/static/profile_settings.html" target="_blank" id="manageProfileBtn" style="margin-left:8px;padding:6px 14px;background:#1e2235;border:1px solid #ffffff12;color:#e2e8f0;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;display:none" title="Manage your accessibility profile">👤 My Profile</a>
+  <button id="settingsBtn" onclick="openSettings()" title="Accessibility settings">
+    ⚙️
+    <div id="profileBadge" style="display:none">!</div>
+  </button>
+</header>
+
+<!-- Accessibility profile modal -->
+<div id="settingsModal" role="dialog" aria-modal="true" aria-label="Accessibility profile selection">
+
+  <!-- Brand -->
+  <div class="ob-brand">
+    <div class="ob-logo"><span>tpg</span>Flex</div>
+    <div class="ob-tagline">AI Voice Booking · Geneva Transport</div>
+  </div>
+
+  <div class="modal-box">
+
+    <!-- Quick continue (shown only for returning users) -->
+    <div class="ob-continue" id="ob-continue" style="display:none" onclick="quickContinue()">
+      <div class="ob-continue-icon" id="ob-continue-icon"></div>
+      <div class="ob-continue-text">
+        <div class="ob-continue-title" id="ob-continue-title">Continue as …</div>
+        <div class="ob-continue-sub">Tap to enter with your saved profile</div>
+      </div>
+      <div class="ob-continue-arrow">›</div>
+    </div>
+    <div class="ob-or" id="ob-or" style="display:none">or choose a different profile</div>
+
+    <div class="modal-title" id="modalTitle">How can we <span>support</span> you?</div>
+    <div class="modal-sub">Everyone moves through the city differently. Tell us what works for you, and tpgFlex will shape <b>every trip</b> — navigation, audio, and alerts — around your needs.</div>
+
+    <div class="profile-grid">
+      <div class="profile-card" data-profile="blind" onclick="selectProfile('blind')" tabindex="0" role="button" aria-pressed="false">
+        <div class="icon">👁️</div>
+        <div class="label">Blind / Low Vision</div>
+        <div class="desc">We'll guide you with spoken turn-by-turn directions and read every reply aloud.</div>
+      </div>
+      <div class="profile-card" data-profile="deaf" onclick="selectProfile('deaf')" tabindex="0" role="button" aria-pressed="false">
+        <div class="icon">🦻</div>
+        <div class="label">Deaf / Hard of Hearing</div>
+        <div class="desc">Clear visual guidance with bold on-screen alerts — nothing relies on sound.</div>
+      </div>
+      <div class="profile-card" data-profile="motor-wheelchair" onclick="selectProfile('motor-wheelchair')" tabindex="0" role="button" aria-pressed="false">
+        <div class="icon">♿</div>
+        <div class="label">Motor Wheelchair</div>
+        <div class="desc">Step-free routes and level-access boarding, highlighted for your electric chair.</div>
+      </div>
+      <div class="profile-card" data-profile="manual-wheelchair" onclick="selectProfile('manual-wheelchair')" tabindex="0" role="button" aria-pressed="false">
+        <div class="icon">🦽</div>
+        <div class="label">Manual Wheelchair</div>
+        <div class="desc">Accessible stops and boarding assistance, arranged ahead on every ride.</div>
+      </div>
+    </div>
+
+    <button class="modal-save" id="saveProfileBtn" onclick="saveProfile()" disabled>Confirm Profile</button>
+
+  </div><!-- .modal-box -->
+</div><!-- #settingsModal -->
+
+<aside>
+  <button class="new-chat-btn" onclick="resetConversation()">+ New conversation</button>
+  <div id="chat"></div>
+  <div class="input-bar">
+    <div style="position:relative;flex-shrink:0">
+      <div id="voice-viz">
+        <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+        <div class="vbar"></div><div class="vbar"></div>
+      </div>
+      <button id="micBtn" onclick="toggleMic()" title="Hold to speak">🎤</button>
+    </div>
+    <input id="textInput" type="text"
+           placeholder="Type or speak your request…"
+           onkeydown="if(event.key==='Enter') sendText()"/>
+    <button id="sendBtn" onclick="sendText()">Send</button>
+  </div>
+</aside>
+
+<main><div id="map"></div></main>
+
+<section id="quickbook">
+  <div class="qb-head">
+    <div class="qb-title">⚡ Quick <span>Book</span></div>
+    <div class="qb-sub">Tap a pick-up, a destination, then a time.</div>
+  </div>
+  <div class="qb-body">
+    <div class="qb-cols">
+      <svg id="qb-link" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="qbGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#4ade80"/>
+            <stop offset="1" stop-color="#f87171"/>
+          </linearGradient>
+        </defs>
+        <path class="qb-link-path" d=""/>
+        <circle class="qb-link-dot p" r="5"/>
+        <circle class="qb-link-dot d" r="5"/>
+      </svg>
+      <div>
+        <div class="qb-col-head pick">🟢 Pick-up</div>
+        <div class="qb-list" id="qb-pick-list">
+          <div style="font-size:11px;color:var(--muted);text-align:center;padding:20px 0">Loading stops…</div>
+        </div>
+      </div>
+      <div>
+        <div class="qb-col-head drop">🔴 Drop-off</div>
+        <div class="qb-list" id="qb-drop-list"></div>
+      </div>
+    </div>
+    <div class="qb-when">
+      <div class="qb-when-label">🕐 When?</div>
+      <div class="qb-times" id="qb-times"></div>
+    </div>
+  </div>
+  <div class="qb-foot">
+    <div class="qb-summary" id="qb-summary">Select a pick-up &amp; destination</div>
+    <button class="qb-book" id="qb-book" onclick="quickBookSubmit()" disabled>🚐 Book Ride</button>
+  </div>
+</section>
+
+<script>
+const API = "http://localhost:8000";
+const USER_ID = "USR_001";
+
+// Conversation history — sent to backend each turn so AI remembers
+let conversationHistory = [];
+let tripMarkers = [];
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const map = L.map("map").setView([46.2050, 6.1400], 13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap"
+}).addTo(map);
+
+const stopIcon    = L.divIcon({ className:'', html:'<div style="width:11px;height:11px;background:#e63312;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px #0008"></div>' });
+const vehicleIcon = L.divIcon({ className:'', html:'<div style="font-size:20px;line-height:1">🚐</div>' });
+const pickupIcon  = L.divIcon({ className:'', html:'<div style="font-size:24px;line-height:1">📍</div>' });
+const dropoffIcon = L.divIcon({ className:'', html:'<div style="font-size:24px;line-height:1">🏁</div>' });
+
+async function loadMap() {
+  try {
+    const [stops, vehicles] = await Promise.all([
+      fetch(`${API}/stops`).then(r=>r.json()),
+      fetch(`${API}/vehicles`).then(r=>r.json())
+    ]);
+    stopsCache = stops;
+    stops.forEach(s => {
+      L.marker([s.latitude, s.longitude], {icon: stopIcon}).addTo(map)
+       .bindPopup(`<b>${s.name}</b><br>Zone ${s.zone}`);
+    });
+    vehicles.filter(v=>v.status!=='maintenance').forEach(v => {
+      L.marker([v.current_latitude, v.current_longitude], {icon: vehicleIcon})
+       .addTo(map)
+       .bindPopup(`<b>${v.vehicle_id}</b><br>${v.status}<br>Capacity: ${v.capacity}`);
+    });
+    populateQuickBook();
+  } catch(e) { console.error("Map load failed:", e); }
+}
+
+// ── Quick (tap-to-book) panel ─────────────────────────────────────────────────
+let qbPick=null, qbDrop=null, qbTime='now', qbTimeLabel='Now';
+
+function populateQuickBook() {
+  if (!stopsCache.length) return;
+  const popular = stopsCache.slice(0, 6);
+  const pickList = document.getElementById('qb-pick-list');
+  const dropList = document.getElementById('qb-drop-list');
+  pickList.innerHTML=''; dropList.innerHTML='';
+  popular.forEach(s => {
+    pickList.appendChild(qbStopEl(s.name, 'pick'));
+    dropList.appendChild(qbStopEl(s.name, 'drop'));
+  });
+
+  const now = new Date();
+  const mk = mins => new Date(now.getTime()+mins*60000).toTimeString().slice(0,5);
+  const times = [
+    { label:'Now',     val:'now'   },
+    { label:'+15 min', val:mk(15)  },
+    { label:'+30 min', val:mk(30)  },
+    { label:'+1 hour', val:mk(60)  },
+  ];
+  const tw = document.getElementById('qb-times');
+  tw.innerHTML='';
+  times.forEach((t,i) => {
+    const b=document.createElement('div');
+    b.className='qb-time'+(i===0?' sel':'');
+    b.textContent=t.label;
+    b.onclick=()=>{
+      qbTime=t.val; qbTimeLabel=t.label;
+      document.querySelectorAll('#qb-times .qb-time').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      updateQbSummary();
+    };
+    tw.appendChild(b);
+  });
+  updateQbSummary();
+}
+
+function qbStopEl(name, kind) {
+  const el=document.createElement('div');
+  el.className='qb-stop';
+  el.innerHTML=`<div class="qb-nm">${name}</div>
+                <div class="qb-chk">✓ Selected</div>`;
+  el.onclick=()=>selectQbStop(kind,name,el);
+  return el;
+}
+
+function selectQbStop(kind,name,el) {
+  const listId = kind==='pick' ? 'qb-pick-list' : 'qb-drop-list';
+  const cls    = kind==='pick' ? 'sel-pick'     : 'sel-drop';
+  const already = (kind==='pick' && qbPick===name) || (kind==='drop' && qbDrop===name);
+  document.querySelectorAll('#'+listId+' .qb-stop').forEach(x=>x.classList.remove(cls));
+  if (already) {
+    if (kind==='pick') qbPick=null; else qbDrop=null;
+  } else {
+    el.classList.add(cls);
+    if (kind==='pick') qbPick=name; else qbDrop=name;
+  }
+  updateQbSummary();
+}
+
+function updateQbSummary() {
+  const sum=document.getElementById('qb-summary');
+  const btn=document.getElementById('qb-book');
+  if (qbPick && qbDrop && qbPick!==qbDrop) {
+    sum.innerHTML=`<b>${qbPick}</b> → <b>${qbDrop}</b> · ${qbTimeLabel}`;
+    btn.disabled=false;
+  } else if (qbPick && qbDrop) {
+    sum.textContent='Pick-up and destination must be different';
+    btn.disabled=true;
+  } else {
+    sum.textContent='Select a pick-up & destination';
+    btn.disabled=true;
+  }
+  drawQbLink();
+}
+
+function drawQbLink() {
+  const cols = document.querySelector('.qb-cols');
+  const svg  = document.getElementById('qb-link');
+  const path = svg && svg.querySelector('.qb-link-path');
+  if (!cols || !path) return;
+
+  const dotP = svg.querySelector('.qb-link-dot.p');
+  const dotD = svg.querySelector('.qb-link-dot.d');
+
+  const pickEl = document.querySelector('#qb-pick-list .qb-stop.sel-pick');
+  const dropEl = document.querySelector('#qb-drop-list .qb-stop.sel-drop');
+  if (!pickEl || !dropEl) {
+    path.setAttribute('d','');
+    dotP.classList.remove('show'); dotD.classList.remove('show');
+    return;
+  }
+
+  const c  = cols.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${c.width} ${c.height}`);
+
+  const pr = pickEl.getBoundingClientRect();
+  const dr = dropEl.getBoundingClientRect();
+  const x1 = pr.left - c.left + pr.width/2,  y1 = pr.top - c.top + pr.height/2;
+  const x2 = dr.left - c.left + dr.width/2,  y2 = dr.top - c.top + dr.height/2;
+  const mx = (x1 + x2) / 2;
+
+  path.setAttribute('d', `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`);
+  dotP.setAttribute('cx', x1); dotP.setAttribute('cy', y1); dotP.classList.add('show');
+  dotD.setAttribute('cx', x2); dotD.setAttribute('cy', y2); dotD.classList.add('show');
+}
+
+window.addEventListener('resize', drawQbLink);
+
+async function quickBookSubmit() {
+  if (!qbPick || !qbDrop || qbPick===qbDrop) return;
+  const btn=document.getElementById('qb-book');
+  btn.disabled=true; btn.textContent='Booking…';
+  addBubble(`Quick book: ${qbPick} → ${qbDrop} (${qbTimeLabel})`, 'user');
+  try {
+    const res=await fetch(`${API}/quick-book`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ pickup:qbPick, dropoff:qbDrop, time:qbTime,
+                            passengers:1, user_id:USER_ID })
+    });
+    const data=await res.json();
+    if (!res.ok || !data.data) {
+      botSay(data.detail || data.reply || 'Sorry, that booking could not be completed.');
+    } else {
+      addBubble(data.reply,'bot');
+      speak(data.reply);
+      conversationHistory.push({ role:'assistant', content:data.reply });
+      await addBookingCard(data.data);
+      plotTrip(data.data);
+      qbPick=null; qbDrop=null;
+      document.querySelectorAll('.qb-stop').forEach(x=>x.classList.remove('sel-pick','sel-drop'));
+    }
+  } catch(e) {
+    botSay('Could not reach the booking system for quick book.');
+  } finally {
+    btn.textContent='🚐 Book Ride';
+    updateQbSummary();
+  }
+}
+
+// ── Chat UI ───────────────────────────────────────────────────────────────────
+function addBubble(text, role) {
+  const div = document.createElement("div");
+  div.className = `bubble ${role}`;
+  div.textContent = text;
+  document.getElementById("chat").appendChild(div);
+  scrollChat();
+  return div;
+}
+
+function addTyping() {
+  const div = document.createElement("div");
+  div.className = "bubble typing";
+  div.id = "typing";
+  div.innerHTML = `<div class="td-wrap"><span class="td"></span><span class="td"></span><span class="td"></span></div>`;
+  document.getElementById("chat").appendChild(div);
+  scrollChat();
+}
+
+function removeTyping() {
+  const el = document.getElementById("typing");
+  if (el) el.remove();
+}
+
+async function addBookingCard(booking) {
+  const pickup_time  = new Date(booking.pickup_time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const dropoff_time = new Date(booking.dropoff_time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+
+  // Ensure stops cache is populated (may be empty on first load)
+  if (!stopsCache.length) {
+    try {
+      stopsCache = await fetch(`${API}/stops`).then(r => r.json());
+    } catch(e) { /* fallback: leave cache empty, skip nav button */ }
+  }
+
+  // Build navigate button — always shown, routes based on profile at click time
+  const pickupStop  = stopsCache.find(s => s.name === booking.pickup);
+  const dropoffStop = stopsCache.find(s => s.name === booking.dropoff);
+  const isBlind = userProfile === "blind";
+  const navIcon  = isBlind ? "📷" : "🗺️";
+  const navLabel = isBlind ? "Camera Navigation (Blind mode)" : "Map Navigation";
+
+  // Store booking coords for the click handler
+  const bookingKey = `nav_${booking.booking_id}`;
+  window._navBookings = window._navBookings || {};
+  window._navBookings[bookingKey] = { pickupStop, dropoffStop, bookingId: booking.booking_id };
+
+  const navBtn = `<button onclick="openNavForBooking('${bookingKey}')"
+    style="display:block;width:100%;margin-top:10px;padding:9px 12px;background:#3b82f6;color:white;
+           text-align:center;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;">
+    ${navIcon} ${navLabel}
+  </button>`;
+
+  const isWheelchair = userProfile === "motor-wheelchair" || userProfile === "manual-wheelchair";
+  const rampRowHtml = isWheelchair ? `
+    <div class="ramp-row" id="ramp-row-${booking.booking_id}">
+      <div class="ramp-icon">♿</div>
+      <div class="ramp-info">
+        <div class="ramp-title">Ramp Request Sent</div>
+        <div class="ramp-status" id="ramp-status-${booking.booking_id}">Notifying driver…</div>
+      </div>
+      <div class="ramp-badge" id="ramp-badge-${booking.booking_id}">Pending</div>
+    </div>` : "";
+
+  const div = document.createElement("div");
+  div.className = "booking-card";
+  div.innerHTML = `
+    <div class="card-title">✅ Booking Confirmed</div>
+    <div class="row"><span class="label">ID</span><span class="value"><span class="badge">${booking.booking_id}</span></span></div>
+    <div class="row"><span class="label">Pick-up</span><span class="value">${booking.pickup}</span></div>
+    <div class="row"><span class="label">Drop-off</span><span class="value">${booking.dropoff}</span></div>
+    <div class="row"><span class="label">Departure</span><span class="value">${pickup_time}</span></div>
+    <div class="row"><span class="label">Arrival est.</span><span class="value">${dropoff_time}</span></div>
+    <div class="row"><span class="label">Vehicle</span><span class="value">${booking.vehicle_id}</span></div>
+    <div class="row"><span class="label">Passengers</span><span class="value">${booking.passengers}</span></div>
+    ${rampRowHtml}
+    ${navBtn}
+  `;
+  document.getElementById("chat").appendChild(div);
+  scrollChat();
+
+  if (isWheelchair) requestRamp(booking);
+}
+
+function scrollChat() {
+  const chat = document.getElementById("chat");
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function resetConversation() {
+  conversationHistory = [];
+  document.getElementById("chat").innerHTML = "";
+  tripMarkers.forEach(m => map.removeLayer(m));
+  tripMarkers = [];
+  botSay("Hello! I'm your tpgFlex assistant. Where are you right now, or where would you like to go?");
+}
+
+function botSay(text) {
+  addBubble(text, "bot");
+  speak(text);
+  conversationHistory.push({ role: "assistant", content: text });
+}
+
+// ── GPS helpers ──────────────────────────────────────────────────────────────
+let userLocation = null;
+let nearestStopName = null;
+let stopsCache = [];
+
+function getGPS() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      ()  => resolve(null),
+      { timeout: 4000 }
+    );
+  });
+}
+
+async function getNearestStopName(lat, lon) {
+  try {
+    const stop = await fetch(`${API}/stops/nearest?lat=${lat}&lon=${lon}`).then(r=>r.json());
+    return stop.name || null;
+  } catch(e) { return null; }
+}
+
+const LOCATION_KEYWORDS = ["my location", "detect", "current location",
+  "where i am", "i am here", "i'm here", "locate me", "find me",
+  "use my location", "current position", "gps"];
+
+// ── Core send ─────────────────────────────────────────────────────────────────
+async function sendMessage(text) {
+  if (!text.trim()) return;
+
+  let finalText = text;
+  const wantsLocation = LOCATION_KEYWORDS.some(k => text.toLowerCase().includes(k));
+
+  if (wantsLocation) {
+    addBubble(text, "user");
+    addTyping();
+    const gps = await getGPS();
+    removeTyping();
+    if (gps) {
+      userLocation = gps;
+      const stopName = await getNearestStopName(gps.lat, gps.lon);
+      if (stopName) {
+        finalText = "My current location is " + stopName;
+        addBubble("📍 Location detected: " + stopName, "bot");
+        conversationHistory.push({ role: "user", content: text });
+        conversationHistory.push({ role: "assistant", content: "I can see you are near " + stopName + "." });
+      } else {
+        botSay("I got your GPS but could not match it to a tpgFlex stop. Could you tell me the nearest landmark?");
+        return;
+      }
+    } else {
+      botSay("I could not get your GPS. Could you tell me where you are? For example: I am at Cornavin or near the hospital.");
+      return;
+    }
+  } else {
+    addBubble(text, "user");
+    conversationHistory.push({ role: "user", content: text });
+
+    const isConfirm    = /^(yes|no|ok|sure|confirm|cancel|thanks|correct|wrong|yep|nope)[\s.!?]*$/i.test(text.trim());
+    const needsLocation = /go to|take me|book|ride|from|nearest|want to go|need a/i.test(text);
+
+    if (!isConfirm) {
+      const alreadyKnown = nearestStopName &&
+        conversationHistory.some(m => m.content.toLowerCase().includes(nearestStopName.toLowerCase()));
+
+      if (nearestStopName && !alreadyKnown) {
+        // Background GPS already resolved — inject silently
+        finalText = `My current location is ${nearestStopName}. ${text}`;
+
+      } else if (!nearestStopName && needsLocation) {
+        // GPS not resolved yet — try on the fly before sending
+        addTyping();
+        const gps = await getGPS();
+        removeTyping();
+        if (gps) {
+          userLocation = gps;
+          const stopName = await getNearestStopName(gps.lat, gps.lon);
+          if (stopName) {
+            nearestStopName = stopName;
+            finalText = `My current location is ${stopName}. ${text}`;
+            addBubble("📍 Nearest stop: " + stopName, "bot");
+            conversationHistory.push({ role: "assistant", content: "You are near " + stopName + "." });
+          }
+        }
+      }
+    }
+  }
+
+  addTyping();
+  document.getElementById("sendBtn").disabled = true;
+  const _mb = document.getElementById("micBtn");
+  if (_mb && !listening) { _mb.classList.add("thinking"); _mb.textContent = "⏳"; }
+
+  try {
+    const res = await fetch(`${API}/voice/process`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: finalText,
+        user_id: USER_ID,
+        user_lat: userLocation ? userLocation.lat : null,
+        user_lon: userLocation ? userLocation.lon : null,
+        history: conversationHistory.slice(0, -1)
+      })
+    });
+
+    const data = await res.json();
+    removeTyping();
+    if (_mb && !listening) { _mb.classList.remove("thinking"); _mb.textContent = "🎤"; }
+
+    const reply = data.reply || data.tts_response || "Sorry, something went wrong.";
+
+    // Show booking card if booking completed
+    if (data.data && data.data.booking_id) {
+      addBubble(reply, "bot");
+      await addBookingCard(data.data);
+      speak(reply);
+      plotTrip(data.data);
+      conversationHistory.push({ role: "assistant", content: reply });
+    } else {
+      botSay(reply);
+    }
+
+  } catch(e) {
+    removeTyping();
+    if (_mb && !listening) { _mb.classList.remove("thinking"); _mb.textContent = "🎤"; }
+    botSay("I couldn't connect to the booking system. Make sure the backend is running.");
+  } finally {
+    document.getElementById("sendBtn").disabled = false;
+  }
+}
+
+function sendText() {
+  const text = document.getElementById("textInput").value.trim();
+  if (!text) return;
+  document.getElementById("textInput").value = "";
+  sendMessage(text);
+}
+
+// ── Voice — Browser Web Speech API ───────────────────────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+
+  recognition.onresult = (e) => {
+    const input = document.getElementById("textInput");
+    let interim = "", final = "";
+    for (const r of e.results) {
+      if (r.isFinal) final += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    input.value = final || interim;
+    input.style.fontStyle = interim && !final ? "italic" : "normal";
+    if (final) {
+      stopMic();
+      sendMessage(final.trim());
+    }
+  };
+
+  recognition.onerror = (e) => {
+    stopMic();
+    if (e.error !== "no-speech") {
+      botSay("Microphone error: " + e.error + ". Please check your browser settings.");
+    }
+  };
+
+  recognition.onend = () => {
+    if (listening) stopMic();
+  };
+}
+
+function toggleMic() {
+  if (!SpeechRecognition) {
+    botSay("Your browser doesn't support voice recognition. Please use Chrome or Edge.");
+    return;
+  }
+  if (listening) stopMic();
+  else startMic();
+}
+
+function startMic() {
+  const input = document.getElementById("textInput");
+  input.value = "";
+  input.placeholder = "Listening…";
+  recognition.start();
+  listening = true;
+  const btn = document.getElementById("micBtn");
+  btn.classList.add("listening");
+  btn.textContent = "⏹";
+  document.getElementById("voice-viz").classList.add("on");
+}
+
+function stopMic() {
+  if (recognition) recognition.stop();
+  listening = false;
+  const btn = document.getElementById("micBtn");
+  btn.classList.remove("listening", "thinking", "speaking");
+  btn.textContent = "🎤";
+  document.getElementById("textInput").placeholder = "Type or speak your request…";
+  document.getElementById("textInput").style.fontStyle = "normal";
+  document.getElementById("voice-viz").classList.remove("on");
+}
+
+// ── TTS ───────────────────────────────────────────────────────────────────────
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US";
+  u.rate = 1.0;
+  const btn = document.getElementById("micBtn");
+  if (btn && !listening) { btn.classList.add("speaking"); btn.textContent = "🔊"; }
+  u.onend = u.onerror = () => {
+    if (btn && !listening) { btn.classList.remove("speaking"); btn.textContent = "🎤"; }
+  };
+  window.speechSynthesis.speak(u);
+}
+
+// ── Map trip plot ─────────────────────────────────────────────────────────────
+async function plotTrip(booking) {
+  tripMarkers.forEach(m => map.removeLayer(m));
+  tripMarkers = [];
+  const stops = stopsCache.length ? stopsCache : await fetch(`${API}/stops`).then(r=>r.json());
+  const pickup  = stops.find(s => s.name === booking.pickup);
+  const dropoff = stops.find(s => s.name === booking.dropoff);
+  if (pickup) {
+    const m = L.marker([pickup.latitude, pickup.longitude], {icon: pickupIcon})
+      .addTo(map).bindPopup(`<b>Pick-up: ${pickup.name}</b>`).openPopup();
+    tripMarkers.push(m);
+  }
+  if (dropoff) {
+    const m = L.marker([dropoff.latitude, dropoff.longitude], {icon: dropoffIcon})
+      .addTo(map).bindPopup(`<b>Drop-off: ${dropoff.name}</b>`);
+    tripMarkers.push(m);
+  }
+  if (pickup && dropoff) {
+    const line = L.polyline(
+      [[pickup.latitude,pickup.longitude],[dropoff.latitude,dropoff.longitude]],
+      {color:"#e63312", weight:3, dashArray:"8,5"}
+    ).addTo(map);
+    tripMarkers.push(line);
+    map.fitBounds(line.getBounds(), {padding:[50,50]});
+  }
+}
+
+// ── Ramp Request ─────────────────────────────────────────────────────────────
+async function requestRamp(booking) {
+  try {
+    const res = await fetch(`${API}/ramp-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking_id: booking.booking_id,
+        stop_name:  booking.pickup,
+        vehicle_id: booking.vehicle_id,
+        user_id:    USER_ID,
+        profile:    userProfile
+      })
+    });
+    const ramp = await res.json();
+
+    const statusEl = document.getElementById(`ramp-status-${booking.booking_id}`);
+    if (statusEl) statusEl.textContent = `Driver notified — vehicle ${booking.vehicle_id}`;
+
+    speak("A ramp request has been sent to your driver. You will be notified when they confirm.");
+    pollRampStatus(ramp.id, booking.booking_id);
+  } catch(e) {
+    const statusEl = document.getElementById(`ramp-status-${booking.booking_id}`);
+    if (statusEl) statusEl.textContent = "Could not send ramp request — please inform the driver.";
+  }
+}
+
+function pollRampStatus(rampId, bookingId) {
+  const interval = setInterval(async () => {
+    try {
+      const ramp = await fetch(`${API}/ramp-request/${rampId}`).then(r => r.json());
+      if (ramp.status === "acknowledged") {
+        clearInterval(interval);
+
+        const row    = document.getElementById(`ramp-row-${bookingId}`);
+        const badge  = document.getElementById(`ramp-badge-${bookingId}`);
+        const status = document.getElementById(`ramp-status-${bookingId}`);
+        const title  = row && row.querySelector(".ramp-title");
+
+        if (row)    row.classList.add("acknowledged");
+        if (badge)  { badge.textContent = "Confirmed ✓"; badge.classList.add("confirmed"); }
+        if (title)  title.textContent = "Ramp Confirmed by Driver";
+        if (status) status.textContent = `Driver will open ramp at ${ramp.stop_name}`;
+
+        speak("Great news! The driver has confirmed they will open the ramp for you at the pickup stop.");
+        scrollChat();
+      }
+    } catch(e) {}
+  }, 3000);
+}
+
+// ── Accessibility Profile ─────────────────────────────────────────────────────
+const PROFILES = {
+  "blind":            { label: "Blind",            icon: "👁️" },
+  "deaf":             { label: "Deaf",              icon: "🦻" },
+  "motor-wheelchair": { label: "Motor Wheelchair",  icon: "♿" },
+  "manual-wheelchair":{ label: "Manual Wheelchair", icon: "🦽" }
+};
+
+let userProfile = localStorage.getItem("tpgflex_profile") || null;
+let pendingProfile = null;
+
+function openSettings() {
+  pendingProfile = userProfile;
+
+  // Show quick-continue banner if a profile was previously saved
+  const cont     = document.getElementById("ob-continue");
+  const contIcon = document.getElementById("ob-continue-icon");
+  const contTitle= document.getElementById("ob-continue-title");
+  const obOr     = document.getElementById("ob-or");
+  if (userProfile && PROFILES[userProfile]) {
+    const p = PROFILES[userProfile];
+    contIcon.textContent  = p.icon;
+    contTitle.textContent = `Continue as ${p.label}`;
+    cont.style.display  = "flex";
+    obOr.style.display  = "block";
+  } else {
+    cont.style.display  = "none";
+    obOr.style.display  = "none";
+  }
+
+  // Pre-select the saved card (if any)
+  document.querySelectorAll(".profile-card").forEach(card => {
+    const isSelected = card.dataset.profile === userProfile;
+    card.classList.toggle("selected", isSelected);
+    card.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+  document.getElementById("saveProfileBtn").disabled = !userProfile;
+
+  const modal = document.getElementById("settingsModal");
+  modal.classList.remove("closing");
+  modal.classList.add("open");
+}
+
+function closeSettings() {
+  const modal = document.getElementById("settingsModal");
+  modal.classList.add("closing");
+  setTimeout(() => { modal.classList.remove("open", "closing"); }, 440);
+}
+
+function selectProfile(key) {
+  pendingProfile = key;
+  document.querySelectorAll(".profile-card").forEach(card => {
+    const isSelected = card.dataset.profile === key;
+    card.classList.toggle("selected", isSelected);
+    card.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+  document.getElementById("saveProfileBtn").disabled = false;
+}
+
+function quickContinue() {
+  if (!userProfile) return;
+  applyProfile(userProfile);
+  closeSettings();
+}
+
+function saveProfile() {
+  if (!pendingProfile) return;
+  userProfile = pendingProfile;
+  localStorage.setItem("tpgflex_profile", userProfile);
+  applyProfile(userProfile);
+
+  const p = PROFILES[userProfile];
+  closeSettings();
+  setTimeout(() => {
+    botSay(`Profile set to ${p.label}. I'll tailor the experience to your needs.`);
+  }, 300);
+}
+
+function applyProfile(key) {
+  if (!key) return;
+  const p = PROFILES[key];
+
+  // Update header chip
+  const chip = document.getElementById("profileChip");
+  chip.textContent = p.icon + " " + p.label;
+  chip.classList.add("visible");
+
+  // Hide the ! badge — profile is set
+  document.getElementById("profileBadge").style.display = "none";
+
+  // Deaf mode: mute TTS
+  if (key === "deaf") {
+    window._ttsEnabled = false;
+  } else {
+    window._ttsEnabled = true;
+  }
+
+  // Blind mode: set recognition lang and show mic hint
+  if (key === "blind") {
+    document.getElementById("micBtn").title = "Press to speak (voice is your primary input)";
+  }
+}
+
+function openNavigate() {
+  const page = userProfile === "blind"
+    ? "/static/navigate_user.html"
+    : "/static/navigate_map.html";
+  window.open(page, "_blank");
+}
+
+function openNavForBooking(key) {
+  const entry = (window._navBookings || {})[key];
+  const isBlind = userProfile === "blind";
+  const base = isBlind ? "/static/navigate_user.html" : "/static/navigate_map.html";
+
+  const v = Date.now();
+  if (entry && entry.pickupStop && entry.dropoffStop) {
+    const params = new URLSearchParams({
+      destName:  entry.pickupStop.name,
+      destLat:   entry.pickupStop.latitude,
+      destLng:   entry.pickupStop.longitude,
+      finalName: entry.dropoffStop.name,
+      finalLat:  entry.dropoffStop.latitude,
+      finalLng:  entry.dropoffStop.longitude,
+      _v: v
+    });
+    window.open(`${base}?${params}`, "_blank");
+  } else {
+    window.open(`${base}?_v=${v}`, "_blank");
+  }
+}
+
+// Patch speak() to respect deaf mode
+const _speakOrig = speak;
+window.speak = function(text) {
+  if (window._ttsEnabled === false) return;
+  _speakOrig(text);
+};
+
+// Modal is mandatory — clicking outside does nothing
+
+// Keyboard support for profile cards
+document.querySelectorAll(".profile-card").forEach(card => {
+  card.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      selectProfile(card.dataset.profile);
+    }
+  });
+});
+
+// ── Premium intro → accessibility selection ───────────────────────────────────
+function enterApp() {
+  const intro = document.getElementById("introScreen");
+  if (!intro || intro.classList.contains("exit")) return;
+  intro.classList.add("exit");
+  setTimeout(() => {
+    intro.style.display = "none";
+    if (userProfile) applyProfile(userProfile);  // apply silently while modal is open
+    else document.getElementById("profileBadge").style.display = "flex";
+    openSettings();
+  }, 760);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadMap();
+resetConversation();
+// Intro screen is shown first; enterApp() reveals the accessibility profile picker.
+
+// Silent background GPS — keeps userLocation + nearestStopName current
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(async pos => {
+    userLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    nearestStopName = await getNearestStopName(userLocation.lat, userLocation.lon);
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 5000 });
+}
+
+// ── Profile manager integration ───────────────────────────────────────────
+(async function initProfileManager() {
+  try {
+    const prefs = await window.tpgProfile.getPreferences();
+    // Show the manage-profile header button
+    const manageBtn = document.getElementById('manageProfileBtn');
+    if (manageBtn) {
+      manageBtn.textContent = prefs.icon + ' My Profile';
+      manageBtn.style.display = 'inline-block';
+    }
+    // Silently sync the in-page profile chip with the backend profile
+    if (prefs.accessibility_profile && prefs.accessibility_profile !== 'standard') {
+      // Map backend profile key → local PROFILES key if needed
+      const KEY_MAP = {
+        wheelchair: 'motor-wheelchair',
+        blind: 'blind',
+        deaf: 'deaf',
+      };
+      const localKey = KEY_MAP[prefs.accessibility_profile] || prefs.accessibility_profile;
+      if (PROFILES[localKey] && !userProfile) {
+        userProfile = localKey;
+        localStorage.setItem('tpgflex_profile', localKey);
+        applyProfile(localKey);
+      }
+    }
+    // Show setup banner only if still on default (standard) profile
+    if (prefs.accessibility_profile === 'standard') {
+      window.tpgProfile.showSetupBannerIfNeeded();
+    }
+  } catch(_) {
+    window.tpgProfile.showSetupBannerIfNeeded();
+  }
+})();
+</script>
+</body>
+</html>

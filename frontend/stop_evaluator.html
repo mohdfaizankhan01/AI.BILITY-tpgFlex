@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tpgFlex – Stop Evaluator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="/static/profile_styles.css">
+<script src="/static/profile_manager.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --red:    #e63312;
+  --dark:   #0f1117;
+  --card:   #1a1d27;
+  --card2:  #1e2235;
+  --border: #ffffff12;
+  --green:  #4ade80;
+  --orange: #f59e0b;
+  --purple: #7c3aed;
+  --muted:  #6b7280;
+  --text:   #e2e8f0;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--dark);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+header {
+  flex-shrink: 0;
+  height: 56px;
+  background: #131620;
+  border-bottom: 2px solid var(--red);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+}
+.logo { font-size: 20px; font-weight: 800; }
+.logo span { color: var(--red); }
+.page-title { font-size: 14px; font-weight: 600; color: var(--muted); }
+
+.profile-select-wrapper {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+#profileSelect {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+#profileSelect:focus { border-color: var(--purple); }
+
+.back-link {
+  padding: 6px 14px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.back-link:hover { border-color: var(--red); }
+
+/* ── Main two-column layout ───────────────────────────────────────────────── */
+main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── LEFT column ─────────────────────────────────────────────────────────── */
+#leftCol {
+  width: 40%;
+  min-width: 340px;
+  max-width: 480px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* Search */
+.search-wrap {
+  padding: 16px 16px 0;
+  flex-shrink: 0;
+  position: relative;
+}
+#searchInput {
+  width: 100%;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s;
+}
+#searchInput:focus { border-color: var(--purple); }
+#searchInput::placeholder { color: var(--muted); }
+
+#autocomplete {
+  position: absolute;
+  top: 100%;
+  left: 16px; right: 16px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 8px 24px #00000066;
+}
+.ac-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.ac-item:last-child { border-bottom: none; border-radius: 0 0 10px 10px; }
+.ac-item:hover { background: #ffffff08; }
+.ac-item-name { font-weight: 600; }
+.ac-item-id   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+.map-hint {
+  padding: 8px 16px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Score panel */
+#scorePanel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.placeholder-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  text-align: center;
+  gap: 10px;
+}
+.placeholder-icon { font-size: 40px; }
+.placeholder-msg p { font-size: 13px; line-height: 1.5; }
+
+/* Stop header inside score panel */
+.stop-header {
+  margin-bottom: 14px;
+}
+.stop-header-name {
+  font-size: 20px;
+  font-weight: 800;
+}
+.stop-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.confidence-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid;
+}
+.confidence-chip.high   { border-color: var(--green);  color: var(--green); }
+.confidence-chip.medium { border-color: var(--orange); color: var(--orange); }
+.confidence-chip.low    { border-color: var(--muted);  color: var(--muted); }
+
+/* Score cards 2×2 grid */
+.scores-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.scores-grid .score-card:last-child {
+  grid-column: 1 / -1;
+}
+
+.score-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.score-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 12px 12px 0 0;
+}
+.score-card.green::before  { background: var(--green); }
+.score-card.orange::before { background: var(--orange); }
+.score-card.red::before    { background: var(--red); }
+.score-card.purple::before { background: var(--purple); }
+.score-card.grey::before   { background: var(--muted); }
+
+.card-icon-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.card-value {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 5px 0 2px;
+  line-height: 1;
+}
+.card-value.green  { color: var(--green); }
+.card-value.orange { color: var(--orange); }
+.card-value.red    { color: var(--red); }
+.card-value.purple { color: var(--purple); }
+
+.card-sub {
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 16px;
+}
+
+.card-bar {
+  margin-top: 9px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.card-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .5s ease;
+}
+.card-bar-fill.green  { background: var(--green); }
+.card-bar-fill.orange { background: var(--orange); }
+.card-bar-fill.red    { background: var(--red); }
+
+/* Details expander */
+.details-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  width: fit-content;
+}
+.details-toggle:hover { color: var(--text); }
+.details-toggle .arrow { transition: transform .2s; }
+.details-toggle.open .arrow { transform: rotate(180deg); }
+
+.details-panel {
+  display: none;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  font-size: 12px;
+}
+.details-panel.visible { display: block; }
+.detail-section { margin-bottom: 8px; }
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.detail-items { display: flex; flex-wrap: wrap; gap: 5px; }
+.detail-chip {
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 11px;
+  border: 1px solid;
+}
+.detail-chip.pos { border-color: #4ade8033; color: var(--green); background: #4ade8011; }
+.detail-chip.neg { border-color: #e6331233; color: var(--red);   background: #e6331211; }
+.detail-empty { color: var(--muted); font-style: italic; }
+
+/* Profile breakdown (accessibility 'all') */
+.profile-breakdown {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.pb-label { color: var(--muted); }
+.pb-chip {
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.pb-chip.green  { background: #4ade8022; color: var(--green); }
+.pb-chip.orange { background: #f59e0b22; color: var(--orange); }
+.pb-chip.red    { background: #e6331222; color: var(--red); }
+
+/* ── RIGHT column — map ───────────────────────────────────────────────────── */
+#rightCol {
+  flex: 1;
+  position: relative;
+}
+#map {
+  width: 100%;
+  height: 100%;
+}
+.map-loading {
+  position: absolute;
+  top: 12px; left: 50%; transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  z-index: 500;
+  pointer-events: none;
+}
+
+/* Leaflet overrides */
+.leaflet-popup-content-wrapper {
+  background: var(--card2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px #00000066;
+}
+.leaflet-popup-tip { background: var(--card2); }
+.leaflet-popup-content { margin: 10px 14px; font-size: 13px; }
+
+/* Loading spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--purple);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+.feedback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 13px 16px;
+  background: #1e2235;
+  border: 1px solid var(--purple);
+  border-radius: 12px;
+  color: var(--purple);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background .15s, color .15s;
+}
+.feedback-btn:hover {
+  background: #7c3aed22;
+  color: #a78bfa;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo"><span>tpg</span>Flex</div>
+  <div class="page-title">🚏 Stop Evaluator</div>
+  <div class="profile-select-wrapper">
+    <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="profileForLabel" style="font-size:11px;color:#6b7280"></span>
+        <select id="profileSelect">
+          <option value="all">All users</option>
+          <option value="wheelchair">Wheelchair user</option>
+          <option value="blind">Blind / low vision</option>
+          <option value="deaf">Deaf</option>
+          <option value="low_digital">Low digital literacy</option>
+          <option value="elderly">Elderly</option>
+        </select>
+      </div>
+      <div id="tempViewNote" style="font-size:10px;color:#f59e0b;display:none"></div>
+    </div>
+  </div>
+  <a href="/" class="back-link">← Back to Booking</a>
+</header>
+
+<!-- ── Two-column main ────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- LEFT: search + scores -->
+  <div id="leftCol">
+
+    <div class="search-wrap">
+      <input id="searchInput" type="text" placeholder="Search a stop by name…" autocomplete="off">
+      <div id="autocomplete"></div>
+    </div>
+
+    <div class="map-hint">Or pick a stop on the map →</div>
+
+    <div id="scorePanel">
+      <div class="placeholder-msg">
+        <div class="placeholder-icon">🚏</div>
+        <p>Select a stop from the map<br>or search by name to see its scores.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: map -->
+  <div id="rightCol">
+    <div id="map"></div>
+    <div class="map-loading" id="mapLoading"><span class="spinner"></span>Loading stops…</div>
+  </div>
+</main>
+
+<script>
+'use strict';
+
+// ── State ────────────────────────────────────────────────────────────────────
+let currentStopId   = null;
+let currentProfile  = 'all';           // set after prefs load
+let savedProfile    = 'all';           // user's persisted profile
+let savedProfileLabel = 'All users';
+let allStopData     = [];
+let markers         = {};
+let debounceTimer   = null;
+const userId        = window.tpgProfile.getUserId();
+
+// ── Color helpers ────────────────────────────────────────────────────────────
+
+const COLOR_HEX = {
+  green:  '#4ade80',
+  orange: '#f59e0b',
+  red:    '#e63312',
+  purple: '#7c3aed',
+  grey:   '#6b7280',
+};
+
+function labelToColor(label) {
+  if (!label) return 'grey';
+  const l = label.toLowerCase();
+  if (l === 'good') return 'green';
+  if (l === 'fair') return 'orange';
+  if (l === 'poor') return 'red';
+  return 'purple';
+}
+
+// Worst of accessibility / safety / experience (most conservative for map dot)
+function worstColor(scores) {
+  const rank = { red: 3, orange: 2, green: 1, purple: 0, grey: 0 };
+  let worst = 'green';
+  for (const key of ['accessibility', 'safety', 'experience']) {
+    const c = scores[key]?.color || 'grey';
+    if ((rank[c] || 0) > (rank[worst] || 0)) worst = c;
+  }
+  return worst;
+}
+
+// ── Leaflet map ──────────────────────────────────────────────────────────────
+
+const map = L.map('map', { zoomControl: true }).setView([46.2044, 6.1432], 12);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap © CartoDB',
+  maxZoom: 18,
+}).addTo(map);
+
+function makeMarker(stopData) {
+  const col = worstColor(stopData.scores);
+  const hex  = COLOR_HEX[col] || COLOR_HEX.grey;
+  const m = L.circleMarker([stopData.latitude, stopData.longitude], {
+    radius: 8,
+    fillColor: hex,
+    color: '#fff',
+    weight: 1.5,
+    fillOpacity: 0.9,
+  }).addTo(map);
+
+  const acc   = stopData.scores?.accessibility?.label || '—';
+  const tip   = `<b>${stopData.stop_name}</b><br>Accessibility: ${acc}`;
+  m.bindTooltip(tip, { direction: 'top', offset: [0, -6] });
+
+  m.on('click', () => loadStop(stopData.stop_id));
+  return m;
+}
+
+function recolorMarkers() {
+  for (const [sid, m] of Object.entries(markers)) {
+    const sd = allStopData.find(s => s.stop_id === sid);
+    if (!sd) continue;
+    const col = (currentProfile === 'all')
+      ? worstColor(sd.scores)
+      : labelToColor(sd.scores?.accessibility?.label);
+    m.setStyle({ fillColor: COLOR_HEX[col] || COLOR_HEX.grey });
+    const acc = sd.scores?.accessibility?.label || '—';
+    m.setTooltipContent(`<b>${sd.stop_name}</b><br>Accessibility: ${acc}`);
+  }
+}
+
+// ── Load all stops (map init) ─────────────────────────────────────────────────
+
+async function loadAllStops() {
+  try {
+    const res = await fetch(
+      `/api/stops/evaluate-all?profile=${currentProfile}&user_id=${encodeURIComponent(userId)}`
+    );
+    allStopData = await res.json();
+    document.getElementById('mapLoading').style.display = 'none';
+    for (const sd of allStopData) {
+      markers[sd.stop_id] = makeMarker(sd);
+    }
+  } catch (e) {
+    document.getElementById('mapLoading').textContent = 'Failed to load stops.';
+  }
+}
+
+// ── Load single stop into left panel ─────────────────────────────────────────
+
+async function loadStop(stopId) {
+  currentStopId = stopId;
+
+  // Highlight marker
+  for (const [sid, m] of Object.entries(markers)) {
+    m.setStyle({ weight: sid === stopId ? 3 : 1.5, opacity: sid === stopId ? 1 : 0.7 });
+  }
+
+  const panel = document.getElementById('scorePanel');
+  panel.innerHTML = '<div class="placeholder-msg"><span class="spinner"></span> Loading…</div>';
+
+  try {
+    const res  = await fetch(
+      `/api/stops/evaluate/${stopId}?profile=${currentProfile}&user_id=${encodeURIComponent(userId)}`
+    );
+    const data = await res.json();
+    renderScorePanel(data);
+
+    // Update the matching allStopData entry so recolor works
+    const idx = allStopData.findIndex(s => s.stop_id === stopId);
+    if (idx !== -1) allStopData[idx] = data;
+    if (markers[stopId]) {
+      const col = (currentProfile === 'all')
+        ? worstColor(data.scores)
+        : labelToColor(data.scores?.accessibility?.label);
+      markers[stopId].setStyle({ fillColor: COLOR_HEX[col] || COLOR_HEX.grey, weight: 3 });
+    }
+  } catch (e) {
+    panel.innerHTML = '<div class="placeholder-msg" style="color:#e63312">Failed to load stop data.</div>';
+  }
+}
+
+// ── Render the score cards ────────────────────────────────────────────────────
+
+function renderScorePanel(d) {
+  const sc   = d.scores;
+  const conf = d.data_confidence;
+
+  function barHtml(normalized, color) {
+    if (normalized == null) return '';
+    return `<div class="card-bar">
+      <div class="card-bar-fill ${color}" style="width:${Math.round(normalized * 100)}%"></div>
+    </div>`;
+  }
+
+  function detailsHtml(score, blockKey) {
+    if (!score || score.label === undefined) return '';
+    const pos  = score.matched_positives || [];
+    const neg  = score.matched_negatives || [];
+    const posChips = pos.length
+      ? pos.map(i => `<span class="detail-chip pos">${i}</span>`).join('')
+      : '<span class="detail-empty">None matched</span>';
+    const negChips = neg.length
+      ? neg.map(i => `<span class="detail-chip neg">${i}</span>`).join('')
+      : '<span class="detail-empty">None present</span>';
+
+    return `
+      <div class="details-toggle" onclick="toggleDetails(this, '${blockKey}')">
+        <span>Show details</span><span class="arrow">▼</span>
+      </div>
+      <div class="details-panel" id="details-${blockKey}">
+        <div class="detail-section">
+          <div class="detail-section-title">✅ Positive factors</div>
+          <div class="detail-items">${posChips}</div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-section-title">⚠️ Negative factors</div>
+          <div class="detail-items">${negChips}</div>
+        </div>
+      </div>`;
+  }
+
+  function profileBreakdownHtml(score) {
+    if (!score?.profile_breakdown) return '';
+    const chips = Object.entries(score.profile_breakdown).map(([p, lbl]) => {
+      const c = labelToColor(lbl);
+      return `<span class="pb-chip ${c}">${p}: ${lbl}</span>`;
+    }).join('');
+    return `<div class="profile-breakdown">
+      <span class="pb-label">Per profile:</span> ${chips}
+    </div>`;
+  }
+
+  // TODO: Punctuality should be derived from real-time GPS data in the locations
+  // table once live vehicle tracking is integrated.
+  // TODO: Service Regularity should be computed from tpgFlex schedule data
+  // when the real API is connected.
+
+  const acc  = sc.accessibility;
+  const saf  = sc.safety;
+  const punc = sc.punctuality;
+  const exp  = sc.experience;
+  const reg  = sc.regularity;
+
+  const accColor  = acc?.color  || 'grey';
+  const safColor  = saf?.color  || 'grey';
+  const puncColor = punc?.color || 'green';
+  const expColor  = exp?.color  || 'grey';
+
+  document.getElementById('scorePanel').innerHTML = `
+    <div class="stop-header">
+      <div class="stop-header-name">${d.stop_name}</div>
+      <div class="stop-header-meta">
+        <span>${d.stop_id}</span>
+        <span>${d.survey_count} observation${d.survey_count !== 1 ? 's' : ''}</span>
+        <span class="confidence-chip ${conf}">Confidence: ${conf}</span>
+        <span>Profile: <b>${d.profile_used}</b></span>
+      </div>
+    </div>
+
+    <div class="scores-grid">
+
+      <!-- Accessibility -->
+      <div class="score-card ${accColor}">
+        <div class="card-icon-label">♿ Accessibility</div>
+        <div class="card-value ${accColor}">${acc?.label || '—'}</div>
+        <div class="card-sub">${acc?.normalized != null ? Math.round(acc.normalized * 100) + '%' : ''}</div>
+        ${barHtml(acc?.normalized, accColor)}
+        ${profileBreakdownHtml(acc)}
+        ${detailsHtml(acc, 'accessibility')}
+      </div>
+
+      <!-- Safety -->
+      <div class="score-card ${safColor}">
+        <div class="card-icon-label">🔒 Safety</div>
+        <div class="card-value ${safColor}">${saf?.label || '—'}</div>
+        <div class="card-sub">${saf?.normalized != null ? Math.round(saf.normalized * 100) + '%' : ''}</div>
+        ${barHtml(saf?.normalized, safColor)}
+        ${detailsHtml(saf, 'safety')}
+      </div>
+
+      <!-- Punctuality (stub) -->
+      <div class="score-card ${puncColor}">
+        <div class="card-icon-label">🕐 Punctuality</div>
+        <div class="card-value ${puncColor}">${punc?.label || '—'}</div>
+        <div class="card-sub">${punc?.value || ''}</div>
+      </div>
+
+      <!-- Experience -->
+      <div class="score-card ${expColor}">
+        <div class="card-icon-label">🌟 Ride Experience</div>
+        <div class="card-value ${expColor}">${exp?.label || '—'}</div>
+        <div class="card-sub">${exp?.normalized != null ? Math.round(exp.normalized * 100) + '%' : ''}</div>
+        ${barHtml(exp?.normalized, expColor)}
+        ${detailsHtml(exp, 'experience')}
+      </div>
+
+      <!-- Regularity (full-width, stub) -->
+      <div class="score-card purple">
+        <div class="card-icon-label">⏱️ Service Regularity</div>
+        <div class="card-value purple">${reg?.label || '—'}</div>
+        <div class="card-sub">${reg?.sublabel || ''}</div>
+      </div>
+
+    </div>
+
+    <a class="feedback-btn"
+       href="https://five.epicollect.net/project/crowdsense"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="Give feedback about ${escHtml(d.stop_name)}">
+      📝 Give feedback about this stop
+    </a>
+  `;
+}
+
+// ── Details expander toggle ───────────────────────────────────────────────────
+
+function toggleDetails(btn, blockKey) {
+  const panel = document.getElementById(`details-${blockKey}`);
+  if (!panel) return;
+  const open = panel.classList.toggle('visible');
+  btn.classList.toggle('open', open);
+  btn.querySelector('span:first-child').textContent = open ? 'Hide details' : 'Show details';
+}
+
+// ── Profile change ────────────────────────────────────────────────────────────
+
+document.getElementById('profileSelect').addEventListener('change', async e => {
+  currentProfile = e.target.value;
+
+  // Show temporary-view note if they picked something different from their saved profile
+  const note = document.getElementById('tempViewNote');
+  if (currentProfile !== savedProfile) {
+    note.textContent = `Temporary view — your saved profile is ${savedProfileLabel}`;
+    note.style.display = 'block';
+  } else {
+    note.style.display = 'none';
+  }
+
+  // Re-fetch all stops for the new profile and recolor
+  try {
+    const res = await fetch(
+      `/api/stops/evaluate-all?profile=${currentProfile}&user_id=${encodeURIComponent(userId)}`
+    );
+    allStopData = await res.json();
+    recolorMarkers();
+  } catch (_) { /* silently keep existing colors */ }
+
+  if (currentStopId) loadStop(currentStopId);
+});
+
+// ── Search autocomplete ───────────────────────────────────────────────────────
+
+const searchInput = document.getElementById('searchInput');
+const acDiv       = document.getElementById('autocomplete');
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  const q = searchInput.value.trim();
+  if (!q) { acDiv.style.display = 'none'; return; }
+  debounceTimer = setTimeout(() => fetchSuggestions(q), 300);
+});
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { acDiv.style.display = 'none'; searchInput.blur(); }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) acDiv.style.display = 'none';
+});
+
+async function fetchSuggestions(q) {
+  try {
+    const res   = await fetch(`/api/stops/search?q=${encodeURIComponent(q)}`);
+    const stops = await res.json();
+    renderAutocomplete(stops);
+  } catch (_) { acDiv.style.display = 'none'; }
+}
+
+function renderAutocomplete(stops) {
+  if (!stops.length) { acDiv.style.display = 'none'; return; }
+  acDiv.innerHTML = stops.map(s => `
+    <div class="ac-item" onclick="selectStop('${s.stop_id}', '${escHtml(s.name)}')">
+      <div class="ac-item-name">${escHtml(s.name)}</div>
+      <div class="ac-item-id">${s.stop_id}</div>
+    </div>`).join('');
+  acDiv.style.display = 'block';
+}
+
+function selectStop(stopId, name) {
+  searchInput.value = name;
+  acDiv.style.display = 'none';
+  loadStop(stopId);
+
+  // Pan map to that stop
+  const sd = allStopData.find(s => s.stop_id === stopId);
+  if (sd) map.setView([sd.latitude, sd.longitude], 15);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+(async function init() {
+  // 1. Load user prefs to set default profile selection
+  try {
+    const prefs = await window.tpgProfile.getPreferences();
+    savedProfile = prefs.scoring_profile || 'all';
+    savedProfileLabel = prefs.icon + ' ' + prefs.label;
+    currentProfile = savedProfile;
+
+    document.getElementById('profileForLabel').textContent =
+      'Showing scores for: ' + savedProfileLabel;
+  } catch(_) {
+    currentProfile = localStorage.getItem('se_profile') || 'all';
+  }
+  document.getElementById('profileSelect').value = currentProfile;
+
+  // 2. Load all stops (map)
+  await loadAllStops();
+})();
+</script>
+</body>
+</html>

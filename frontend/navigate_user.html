@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>tpgFlex – Navigate (Blind)</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="/static/profile_styles.css">
+<script src="/static/profile_manager.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, #0d1f3c 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 20%, #1a0a2e 0%, transparent 60%),
+    linear-gradient(135deg, #0a0c14 0%, #080b18 50%, #0c0a14 100%);
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; user-select: none;
+}
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 40px 40px; pointer-events: none;
+}
+
+/* Phone */
+#phone-wrap { width:393px; height:852px; transform-origin:center center; position:relative; flex-shrink:0; }
+#phone {
+  width:393px; height:852px;
+  background: linear-gradient(160deg, #4a4a4c 0%, #1c1c1e 45%, #2a2a2c 100%);
+  border-radius:52px; position:relative;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:
+    0 0 0 1px #6a6a6a, 0 0 0 2.5px #111, inset 0 0 0 1.5px #505052,
+    0 70px 140px rgba(0,0,0,.95), 0 35px 70px rgba(0,0,0,.75),
+    0 10px 30px rgba(0,0,0,.5), 0 0 60px rgba(59,130,246,.08);
+}
+#phone::before {
+  content:''; position:absolute; inset:0; border-radius:52px;
+  background: linear-gradient(135deg, rgba(255,255,255,.07) 0%, transparent 50%);
+  pointer-events:none;
+}
+.hw-btn {
+  position:absolute; background:linear-gradient(to right,#383838,#4e4e4e);
+  border-radius:3px 0 0 3px; box-shadow:-2px 0 0 #0a0a0a, inset -1px 0 2px rgba(255,255,255,.1);
+}
+.hw-btn.right {
+  background:linear-gradient(to left,#383838,#4e4e4e);
+  border-radius:0 3px 3px 0; box-shadow:2px 0 0 #0a0a0a, inset 1px 0 2px rgba(255,255,255,.1);
+}
+#btn-mute{left:-4px;top:148px;width:4px;height:28px}
+#btn-vol-up{left:-4px;top:196px;width:4px;height:64px}
+#btn-vol-dn{left:-4px;top:272px;width:4px;height:64px}
+#btn-power{right:-4px;top:210px;width:4px;height:80px}
+
+#phone-screen {
+  width:371px; height:828px; background:#000; border-radius:44px;
+  overflow:hidden; position:relative; display:flex; flex-direction:column;
+}
+
+/* Status bar */
+#status-bar {
+  height:50px; background:#0a0a0a; display:flex; align-items:center;
+  padding:14px 16px 0; flex-shrink:0; position:relative; z-index:300;
+}
+.sb-time{font-size:15px;font-weight:700;color:#fff}
+#dynamic-island {
+  position:absolute; left:50%; transform:translateX(-50%); top:10px;
+  width:120px; height:34px; background:#000; border-radius:20px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.island-camera{width:10px;height:10px;border-radius:50%;background:#111;border:1px solid #333}
+.island-faceid{width:10px;height:10px;border-radius:3px;background:#111;border:1px solid #333}
+.sb-icons{margin-left:auto;display:flex;align-items:center;gap:5px}
+.sig-bar{width:3px;background:#fff;border-radius:1px}
+.battery{display:flex;align-items:center;gap:1px}
+.battery-body{width:22px;height:11px;border:1.5px solid #fff;border-radius:3px;padding:1.5px}
+.battery-fill{height:100%;width:75%;background:#4ade80;border-radius:1.5px}
+.battery-tip{width:2px;height:5px;background:#fff;border-radius:0 1px 1px 0}
+
+/* App area */
+#phone-app { flex:1; position:relative; overflow:hidden; background:#000; }
+
+/* Full-screen camera */
+#cam {
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; background:#000;
+}
+#cam-ph {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:10px;
+  color:#475569; font-size:13px; text-align:center; padding:24px;
+}
+#cam-ph .big{font-size:46px}
+
+/* Scrims */
+#grad-top {
+  position:absolute; top:0; left:0; right:0; height:46%;
+  background:linear-gradient(to bottom, rgba(0,0,0,.85) 0%, rgba(0,0,0,.35) 55%, transparent 100%);
+  pointer-events:none; z-index:5;
+}
+#grad-bot {
+  position:absolute; bottom:0; left:0; right:0; height:40%;
+  background:linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.4) 55%, transparent 100%);
+  pointer-events:none; z-index:5;
+}
+
+/* Top instruction bar */
+#instruction-panel {
+  position:absolute; top:0; left:0; right:0; z-index:20;
+  display:flex; align-items:center; gap:12px;
+  padding:14px 16px 14px; background:rgba(21,101,192,.92);
+  min-height:84px; backdrop-filter:blur(4px);
+  box-shadow:0 4px 24px rgba(0,0,0,.55); transition:background .35s;
+}
+#inst-arrow {
+  font-size:46px; line-height:1; flex-shrink:0;
+  filter:drop-shadow(0 2px 10px rgba(0,0,0,.6));
+}
+#inst-arrow.pop{ animation:arrowPop .35s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes arrowPop{ from{transform:scale(.35);opacity:0} to{transform:scale(1);opacity:1} }
+#inst-right{flex:1;min-width:0}
+#inst-text{
+  font-size:14px;font-weight:800;color:#fff;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#inst-dist{font-size:25px;font-weight:900;color:#FFD54F;line-height:1.1;margin-top:1px}
+#inst-sub{
+  font-size:10px;color:rgba(255,255,255,.7);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* Obstacle overlay */
+#obstacle-overlay {
+  position:absolute; top:50%; left:16px; right:16px;
+  transform:translateY(-50%) scale(.85); opacity:0;
+  z-index:30; text-align:center; pointer-events:none;
+  background:rgba(220,38,38,.93); border:3px solid #fca5a5;
+  border-radius:22px; padding:22px 18px;
+  box-shadow:0 16px 50px rgba(0,0,0,.6);
+  transition:opacity .2s, transform .2s, background .2s, border-color .2s;
+}
+#obstacle-overlay.show{ opacity:1; transform:translateY(-50%) scale(1); }
+.obs-icon{font-size:54px;line-height:1}
+.obs-main{font-size:24px;font-weight:900;color:#fff;margin-top:8px;letter-spacing:.3px}
+.obs-sub{font-size:14px;font-weight:700;color:rgba(255,255,255,.85);margin-top:4px}
+
+/* Map inset (picture-in-picture) */
+#map-inset {
+  position:absolute; right:12px; bottom:128px; z-index:25;
+  width:130px; height:130px; border-radius:16px; overflow:hidden;
+  border:2.5px solid rgba(255,255,255,.85);
+  box-shadow:0 6px 24px rgba(0,0,0,.7);
+}
+#map { width:100%; height:100%; }
+.leaflet-control-zoom,.leaflet-control-attribution{display:none!important}
+#map-inset-label {
+  position:absolute; left:0; right:0; bottom:0; z-index:26;
+  background:rgba(0,0,0,.65); color:#fff; font-size:9px; font-weight:700;
+  text-align:center; padding:3px 0; letter-spacing:.5px;
+}
+
+/* Bottom panel */
+#bottom-panel {
+  position:absolute; bottom:0; left:0; right:0; z-index:20;
+  padding:10px 14px 10px;
+}
+#dest-name{
+  font-size:11px;color:#cbd5e1;margin-bottom:6px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  text-shadow:0 1px 4px rgba(0,0,0,.9);
+}
+#bottom-row{display:flex;align-items:flex-end;gap:12px;margin-bottom:10px}
+#total-dist{font-size:23px;font-weight:900;color:#fff;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,.9)}
+#total-eta{font-size:13px;color:#cbd5e1;padding-bottom:2px;text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#step-counter-label{margin-left:auto;font-size:11px;color:#94a3b8;padding-bottom:2px}
+#bottom-btns{display:flex;gap:8px}
+.map-btn{
+  flex:1;padding:11px 6px;border:none;border-radius:13px;
+  font-size:12px;font-weight:800;cursor:pointer;color:#fff;
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  box-shadow:0 4px 14px rgba(0,0,0,.45);
+}
+#btn-repeat{background:#1d4ed8}
+#btn-cam{background:#374151}
+#btn-end{background:#7f1d1d;display:none}
+#btn-help{background:#dc2626}
+
+/* AI badge */
+#ai-badge {
+  position:absolute; left:12px; top:96px; z-index:25;
+  background:rgba(0,0,0,.6); color:#4ade80; font-size:10px; font-weight:700;
+  padding:4px 9px; border-radius:8px; display:flex; align-items:center; gap:5px;
+}
+#ai-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ── Stop picker (blind) ───────────────────────────────────────────────────── */
+#stop-picker{
+  position:absolute;inset:0;z-index:550;
+  background:rgba(5,5,15,.97);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:20px 16px;gap:12px;
+}
+#stop-picker.hidden{display:none}
+#picker-logo{font-size:36px}
+#picker-title{font-size:16px;font-weight:900;color:#fff;text-align:center;line-height:1.3}
+#picker-sub{font-size:11px;color:#64748b;text-align:center}
+#picker-list{width:100%;display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.stop-card{
+  width:100%;display:flex;align-items:center;gap:12px;
+  padding:14px;border:none;border-radius:16px;
+  background:#1a1d2e;border:1px solid rgba(255,255,255,.08);
+  cursor:pointer;text-align:left;transition:background .15s,border-color .15s;
+}
+.stop-card:hover,.stop-card:active{background:#1e2440;border-color:#3b82f6}
+.stop-card-num{
+  flex-shrink:0;width:28px;height:28px;border-radius:50%;
+  background:#1d4ed8;color:#fff;font-size:13px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;
+}
+.stop-card-info{flex:1;min-width:0}
+.stop-card-name{font-size:14px;font-weight:800;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stop-card-dist{font-size:12px;color:#64748b;margin-top:2px}
+.stop-card-arrow{font-size:18px;color:#3b82f6;flex-shrink:0}
+#picker-loading{font-size:13px;color:#64748b;text-align:center}
+
+/* Arrived */
+#arrived-overlay {
+  display:none; position:absolute; inset:0; z-index:60;
+  background:rgba(0,0,0,.9); flex-direction:column;
+  align-items:center; justify-content:center; gap:10px; text-align:center; padding:24px;
+}
+#arrived-overlay.show{display:flex}
+#arrived-icon{font-size:64px}
+#arrived-text{font-size:22px;font-weight:900;color:#4ade80}
+#arrived-sub{font-size:13px;color:#9ca3af;line-height:1.5;white-space:pre-line}
+
+/* Home bar */
+#home-bar{
+  height:34px;background:#000;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;position:relative;z-index:300;
+}
+.home-pill{width:134px;height:5px;background:rgba(255,255,255,.3);border-radius:3px}
+
+canvas#det-canvas{display:none}
+</style>
+</head>
+<body>
+
+<div id="phone-wrap">
+  <div id="phone">
+    <div id="btn-mute"   class="hw-btn"></div>
+    <div id="btn-vol-up" class="hw-btn"></div>
+    <div id="btn-vol-dn" class="hw-btn"></div>
+    <div id="btn-power"  class="hw-btn right"></div>
+
+    <div id="phone-screen">
+
+      <div id="status-bar">
+        <span class="sb-time" id="sb-clock">9:41</span>
+        <div id="dynamic-island">
+          <div class="island-camera"></div>
+          <div class="island-faceid"></div>
+        </div>
+        <div class="sb-icons">
+          <div style="display:flex;align-items:flex-end;gap:1.5px;height:12px">
+            <div class="sig-bar" style="height:30%"></div>
+            <div class="sig-bar" style="height:50%"></div>
+            <div class="sig-bar" style="height:70%"></div>
+            <div class="sig-bar" style="height:100%"></div>
+          </div>
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none" style="margin:0 1px">
+            <path d="M7 9.5a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" fill="white"/>
+            <path d="M3.5 6.7A4.9 4.9 0 0 1 7 5.4c1.3 0 2.5.5 3.5 1.3" stroke="white" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+            <path d="M1 3.9A8.4 8.4 0 0 1 7 1.5c2.3 0 4.4.9 6 2.4" stroke="white" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".6"/>
+          </svg>
+          <div class="battery">
+            <div class="battery-body"><div class="battery-fill"></div></div>
+            <div class="battery-tip"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="phone-app">
+
+        <!-- Live camera -->
+        <video id="cam" playsinline muted autoplay></video>
+        <div id="cam-ph"><div class="big">📷</div><div id="cam-ph-text">Starting camera…</div></div>
+
+        <div id="grad-top"></div>
+        <div id="grad-bot"></div>
+
+        <!-- AI badge -->
+        <div id="ai-badge"><div id="ai-dot"></div><span id="ai-status">Loading AI…</span></div>
+
+        <!-- Top instruction -->
+        <div id="instruction-panel">
+          <div id="inst-arrow">⬆️</div>
+          <div id="inst-right">
+            <div id="inst-text">Getting GPS fix…</div>
+            <div id="inst-dist"></div>
+            <div id="inst-sub"></div>
+          </div>
+        </div>
+
+        <!-- Stop picker (shown when no booking params) -->
+        <div id="stop-picker" class="hidden">
+          <div id="picker-logo">🚌</div>
+          <div id="picker-title">Where do you want to go?</div>
+          <div id="picker-sub">Tap a nearby tpgFlex stop</div>
+          <div id="picker-list">
+            <div id="picker-loading">Finding nearby stops…</div>
+          </div>
+        </div>
+
+        <!-- Obstacle warning -->
+        <div id="obstacle-overlay">
+          <div class="obs-icon" id="obs-icon">⚠️</div>
+          <div class="obs-main"  id="obs-main">Person ahead</div>
+          <div class="obs-sub"   id="obs-sub">Be careful</div>
+        </div>
+
+        <!-- Map inset -->
+        <div id="map-inset">
+          <div id="map"></div>
+          <div id="map-inset-label">ROUTE</div>
+        </div>
+
+        <!-- Bottom -->
+        <div id="bottom-panel">
+          <div id="dest-name">tpgFlex Navigation</div>
+          <div id="bottom-row">
+            <div>
+              <div id="total-dist">— km</div>
+              <div id="total-eta">— min</div>
+            </div>
+            <div id="step-counter-label">0 steps</div>
+          </div>
+          <div id="bottom-btns">
+            <button class="map-btn" id="btn-repeat" onclick="repeatInstruction()">🎤 Repeat</button>
+            <button class="map-btn" id="btn-cam"    onclick="restartCamera()">📷 Camera</button>
+            <button class="map-btn" id="btn-end"    onclick="endNavigation()">✕ End</button>
+            <button class="map-btn" id="btn-help"   onclick="callHelp()">🆘 Help</button>
+          </div>
+        </div>
+
+        <div id="arrived-overlay">
+          <div id="arrived-icon">📍</div>
+          <div id="arrived-text">You've arrived!</div>
+          <div id="arrived-sub"></div>
+        </div>
+
+      </div><!-- #phone-app -->
+
+      <div id="home-bar"><div class="home-pill"></div></div>
+
+    </div><!-- #phone-screen -->
+  </div><!-- #phone -->
+</div><!-- #phone-wrap -->
+
+<canvas id="det-canvas" width="320" height="240"></canvas>
+
+<script>
+// ── Phone scaling ─────────────────────────────────────────────────────────────
+function scalePhone() {
+  const wrap  = document.getElementById('phone-wrap');
+  const scale = Math.min((window.innerHeight - 24) / 852, (window.innerWidth - 24) / 393, 1);
+  wrap.style.transform  = `scale(${scale})`;
+  wrap.style.marginTop  = `${(852 * scale - 852) / 2}px`;
+  wrap.style.marginLeft = `${(393 * scale - 393) / 2}px`;
+}
+scalePhone();
+window.addEventListener('resize', () => { scalePhone(); setTimeout(() => map.invalidateSize(), 80); });
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('sb-clock').textContent =
+    new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false });
+}
+updateClock(); setInterval(updateClock, 10000);
+
+// ── URL params ────────────────────────────────────────────────────────────────
+const _p       = new URLSearchParams(location.search);
+const urlDest  = { name:_p.get('destName'),  lat:parseFloat(_p.get('destLat')),  lng:parseFloat(_p.get('destLng'))  };
+const urlFinal = { name:_p.get('finalName'), lat:parseFloat(_p.get('finalLat')), lng:parseFloat(_p.get('finalLng')) };
+const hasUrlDest  = urlDest.name  && !isNaN(urlDest.lat)  && !isNaN(urlDest.lng);
+const hasUrlFinal = urlFinal.name && !isNaN(urlFinal.lat) && !isNaN(urlFinal.lng);
+
+// ── Map (inset) ───────────────────────────────────────────────────────────────
+const GENEVA = [46.2044, 6.1432];
+const map = L.map('map', {
+  zoomControl:false, attributionControl:false,
+  center:GENEVA, zoom:16,
+  dragging:false, scrollWheelZoom:false, doubleClickZoom:false,
+  touchZoom:false, keyboard:false, boxZoom:false
+});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  { maxZoom:20, subdomains:'abcd' }).addTo(map);
+
+const gpsDotIcon = L.divIcon({
+  className:'',
+  html:`<div style="width:14px;height:14px;background:#4285F4;border:3px solid #fff;
+        border-radius:50%;box-shadow:0 0 0 5px rgba(66,133,244,.3),0 2px 6px rgba(0,0,0,.5)"></div>`,
+  iconSize:[14,14], iconAnchor:[7,7]
+});
+const gpsMarker = L.marker(GENEVA, { icon:gpsDotIcon, zIndexOffset:1000 }).addTo(map);
+let routeLine=null, destMarker=null, finalMarker=null;
+
+// ── Instruction colors ────────────────────────────────────────────────────────
+const BG = { straight:'#1565C0', sharp:'#E65100', uturn:'#B71C1C', arrive:'#1B5E20' };
+function getArrow(t) {
+  const i = t.toLowerCase();
+  if (/sharp left/.test(i))            return { emoji:'↰', bg:BG.sharp };
+  if (/sharp right/.test(i))           return { emoji:'↱', bg:BG.sharp };
+  if (/turn left|keep left/.test(i))   return { emoji:'⬅️', bg:BG.straight };
+  if (/turn right|keep right/.test(i)) return { emoji:'➡️', bg:BG.straight };
+  if (/slight left/.test(i))           return { emoji:'↖️', bg:BG.straight };
+  if (/slight right/.test(i))          return { emoji:'↗️', bg:BG.straight };
+  if (/u-turn/.test(i))                return { emoji:'↩️', bg:BG.uturn };
+  if (/arrived|arrive/.test(i))        return { emoji:'✅', bg:BG.arrive };
+  return { emoji:'⬆️', bg:BG.straight };
+}
+function setInstruction(text, dist, sub, crossing) {
+  let emoji, bg;
+  if (crossing) { emoji='🚸'; bg='#E65100'; }
+  else ({ emoji, bg } = getArrow(text));
+  document.getElementById('instruction-panel').style.background = hexA(bg, .92);
+  const a = document.getElementById('inst-arrow');
+  a.textContent = emoji;
+  a.classList.remove('pop'); void a.offsetWidth; a.classList.add('pop');
+  document.getElementById('inst-text').textContent = text;
+  document.getElementById('inst-dist').textContent = dist || '';
+  document.getElementById('inst-sub').textContent  = sub  || '';
+}
+function hexA(hex, alpha) {
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16),
+        g = parseInt(h.substring(2,4),16),
+        b = parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDist(m){ return m<1000 ? `${Math.round(m)} m` : `${(m/1000).toFixed(1)} km`; }
+function fmtEta(s){ const m=Math.round(s/60); return m<60?`${m} min`:`${Math.floor(m/60)}h ${m%60}m`; }
+function haversine(a,b,c,d){
+  const R=6371000, p1=Math.PI/180*a, p2=Math.PI/180*c,
+        dp=Math.PI/180*(c-a), dl=Math.PI/180*(d-b);
+  const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// ── TTS (nav speech) ──────────────────────────────────────────────────────────
+let lastInstText = '';
+function speak(text, urgent) {
+  if (!window.speechSynthesis) return;
+  if (urgent) window.speechSynthesis.cancel();
+  else if (window.speechSynthesis.speaking) return;  // don't pile up nav speech
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang='en-US'; u.rate = urgent ? 1.1 : 1.0;
+  window.speechSynthesis.speak(u);
+}
+function repeatInstruction(){ if (lastInstText) speak(lastInstText, true); }
+
+// ── Build OSRM instruction ────────────────────────────────────────────────────
+function buildInstruction(s) {
+  const t=s.maneuver?.type||'continue', m=s.maneuver?.modifier||'',
+        st=s.name?` onto ${s.name}`:'';
+  if (t==='depart')  return `Start walking${s.name?' on '+s.name:''}`;
+  if (t==='arrive')  return 'You have arrived';
+  if (t==='turn') {
+    if (m==='left')        return `Turn left${st}`;
+    if (m==='right')       return `Turn right${st}`;
+    if (m==='sharp left')  return `Turn sharp left${st}`;
+    if (m==='sharp right') return `Turn sharp right${st}`;
+    if (m==='slight left') return `Keep left${st}`;
+    if (m==='slight right')return `Keep right${st}`;
+    if (m==='uturn')       return `Make a U-turn${st}`;
+  }
+  if (t==='roundabout') return `Take the roundabout${st}`;
+  if (t==='new name')   return `Continue${st}`;
+  if (t==='continue')   return `Continue straight${st}`;
+  if (t==='merge')      return `Merge${m?' '+m:''}${st}`;
+  if (t==='fork')       return m.includes('left')?`Keep left at the fork${st}`:`Keep right at the fork${st}`;
+  return `Continue${st}`;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let userLat=null, userLng=null, stepCount=0;
+let routeSteps=[], currentStepIndex=0, isNavigating=false, gpsFirstFix=false;
+// Personalised walking params — overridden by tpgProfile on load
+let stepLengthMetres = 0.75;
+let maxWalkingMetres = null;   // null = no limit
+
+// ── Routing ───────────────────────────────────────────────────────────────────
+async function startNavigation(destName, toLat, toLng) {
+  if (!userLat) { speak('Waiting for GPS.', true); return; }
+  document.getElementById('dest-name').textContent = '→ ' + destName;
+  setInstruction(`Navigating to ${destName}`, '', 'Fetching route…', false);
+  speak(`Starting navigation to ${destName}`, true);
+
+  try {
+    const r = await fetch(`/api/route?from_lat=${userLat}&from_lng=${userLng}&to_lat=${toLat}&to_lng=${toLng}`);
+    const data = await r.json();
+    if (data.error || !data.routes?.length) {
+      speak('Could not find a route.', true);
+      setInstruction('Route unavailable','','Check connection',false); return;
+    }
+    const route=data.routes[0], leg=route.legs[0];
+
+    // Warn if route exceeds the user's declared max walking distance
+    if (maxWalkingMetres && leg.distance > maxWalkingMetres) {
+      const distStr = leg.distance > 1000
+        ? (leg.distance / 1000).toFixed(1) + ' km'
+        : Math.round(leg.distance) + ' m';
+      speak(`Warning: this route is ${distStr}, which exceeds your preferred maximum of ${maxWalkingMetres} metres.`, true);
+    }
+
+    if (routeLine) map.removeLayer(routeLine);
+    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+    routeLine = L.polyline(coords, { color:'#4285F4', weight:5, opacity:.9 }).addTo(map);
+
+    if (destMarker) map.removeLayer(destMarker);
+    destMarker = L.circleMarker([toLat,toLng],
+      { radius:7, fillColor:'#4285F4', fillOpacity:1, color:'#fff', weight:2 }).addTo(map);
+    if (hasUrlFinal) {
+      if (finalMarker) map.removeLayer(finalMarker);
+      finalMarker = L.circleMarker([urlFinal.lat,urlFinal.lng],
+        { radius:7, fillColor:'#34A853', fillOpacity:1, color:'#fff', weight:2 }).addTo(map);
+    }
+
+    routeSteps = leg.steps.map(s => ({
+      instruction: buildInstruction(s),
+      lat: s.maneuver.location[1],
+      lng: s.maneuver.location[0],
+      distanceMetres: s.distance,
+      isCrossing:   !!s.is_crossing,
+      crossingHint: s.crossing_hint || '',
+      pathHint:     s.path_hint || '',
+      sideStreets:  s.side_streets || 0
+    }));
+
+    document.getElementById('total-dist').textContent = fmtDist(leg.distance);
+    document.getElementById('total-eta').textContent  = fmtEta(leg.duration);
+
+    currentStepIndex=0; isNavigating=true;
+    document.getElementById('btn-end').style.display = '';
+    announceStep(0);
+    if (routeLine.getBounds().isValid()) {
+      map.fitBounds(routeLine.getBounds(), { padding:[15,15] });
+      setTimeout(() => { if (userLat) map.setView([userLat,userLng], 17); }, 3500);
+    }
+  } catch(e) {
+    speak('Routing failed.', true);
+    setInstruction('Routing failed','','No connection',false);
+  }
+}
+
+function announceStep(i) {
+  if (i >= routeSteps.length) return;
+  const step=routeSteps[i], next=routeSteps[i+1], distText=fmtDist(step.distanceMetres);
+  if (step.isCrossing) {
+    lastInstText = `Caution. ${step.crossingHint} Then ${step.instruction}.`;
+    setInstruction('Cross the road carefully', distText, step.instruction, true);
+    speak(lastInstText, true);
+  } else {
+    const sub = step.pathHint || (next ? `Then: ${next.instruction}` : '');
+    lastInstText = `${step.instruction} in ${distText}.${step.pathHint?' '+step.pathHint:''}`;
+    setInstruction(step.instruction, distText, sub, false);
+    speak(lastInstText, true);
+  }
+}
+
+// ── Stop picker (direct navigation — no booking params) ───────────────────────
+async function showStopPicker(lat, lng) {
+  document.getElementById('stop-picker').classList.remove('hidden');
+  speak('Please choose a nearby stop to navigate to.', true);
+  try {
+    const stops = await fetch(`/api/stops/nearby?lat=${lat}&lng=${lng}`).then(r=>r.json());
+    const list  = document.getElementById('picker-list');
+    list.innerHTML = '';
+    // Announce all three for blind users
+    const names = stops.slice(0,3).map((s,i) => {
+      const d = s.distance_metres < 1000
+        ? `${s.distance_metres} metres`
+        : `${(s.distance_metres/1000).toFixed(1)} kilometres`;
+      return `${i+1}. ${s.name}, ${d}`;
+    });
+    speak(`Nearby stops: ${names.join('. ')}. Tap the number you want.`, false);
+
+    stops.slice(0, 3).forEach((s, i) => {
+      const d = s.distance_metres < 1000
+        ? `${s.distance_metres} m away`
+        : `${(s.distance_metres/1000).toFixed(1)} km away`;
+      const btn = document.createElement('button');
+      btn.className = 'stop-card';
+      btn.innerHTML = `
+        <div class="stop-card-num">${i+1}</div>
+        <div class="stop-card-info">
+          <div class="stop-card-name">${s.name}</div>
+          <div class="stop-card-dist">${d}</div>
+        </div>
+        <div class="stop-card-arrow">›</div>`;
+      btn.onclick = () => {
+        document.getElementById('stop-picker').classList.add('hidden');
+        startNavigation(s.name, s.latitude, s.longitude);
+      };
+      list.appendChild(btn);
+    });
+  } catch(e) {
+    document.getElementById('picker-loading').textContent = 'Could not load nearby stops.';
+    speak('Could not load nearby stops. Please check your connection.', true);
+  }
+}
+
+// ── GPS ───────────────────────────────────────────────────────────────────────
+navigator.geolocation && navigator.geolocation.watchPosition(
+  pos => {
+    userLat=pos.coords.latitude; userLng=pos.coords.longitude;
+    gpsMarker.setLatLng([userLat,userLng]);
+    map.setView([userLat,userLng], map.getZoom()<16?16:map.getZoom());
+    if (!gpsFirstFix) {
+      gpsFirstFix=true; map.setView([userLat,userLng],17);
+      if (hasUrlDest) setTimeout(() => startNavigation(urlDest.name,urlDest.lat,urlDest.lng), 600);
+      else showStopPicker(pos.coords.latitude, pos.coords.longitude);
+    }
+    if (isNavigating) checkStepProximity();
+  },
+  () => {
+    if (!gpsFirstFix) {
+      gpsFirstFix=true; userLat=GENEVA[0]; userLng=GENEVA[1];
+      if (hasUrlDest) {
+        setInstruction('Demo mode','','GPS unavailable',false);
+        setTimeout(() => startNavigation(urlDest.name,urlDest.lat,urlDest.lng), 800);
+      } else {
+        showStopPicker(GENEVA[0], GENEVA[1]);
+      }
+    }
+  },
+  { enableHighAccuracy:true, maximumAge:2000 }
+);
+
+function checkStepProximity() {
+  if (!isNavigating || currentStepIndex>=routeSteps.length) return;
+  const s=routeSteps[currentStepIndex];
+  if (haversine(userLat,userLng,s.lat,s.lng) < 15) {
+    currentStepIndex++;
+    if (currentStepIndex>=routeSteps.length) showArrived();
+    else { announceStep(currentStepIndex); updateRemainingDist(); }
+  }
+}
+function updateRemainingDist() {
+  const rem = routeSteps.slice(currentStepIndex).reduce((s,st)=>s+st.distanceMetres,0);
+  document.getElementById('total-dist').textContent = fmtDist(rem);
+  document.getElementById('total-eta').textContent  = fmtEta(rem/1.2);
+}
+function showArrived() {
+  isNavigating=false;
+  document.getElementById('arrived-overlay').classList.add('show');
+  const name = hasUrlDest ? urlDest.name : 'your stop';
+  document.getElementById('arrived-sub').textContent =
+    hasUrlFinal ? `Board your tpgFlex bus at ${name}\nFinal destination: ${urlFinal.name}` : name;
+  speak(`You have arrived at ${name}. ${hasUrlFinal?'Board the tpgFlex bus.':''}`, true);
+  setInstruction('You have arrived!','',hasUrlFinal?`Board at ${name}`:'',false);
+}
+function endNavigation() {
+  isNavigating = false;
+  routeSteps   = [];
+  currentStepIndex = 0;
+  if (routeLine)  { map.removeLayer(routeLine);  routeLine  = null; }
+  if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  document.getElementById('btn-end').style.display = 'none';
+  document.getElementById('total-dist').textContent = '— km';
+  document.getElementById('total-eta').textContent  = '— min';
+  document.getElementById('dest-name').textContent  = 'tpgFlex Navigation';
+  setInstruction('Navigation ended', '', 'Choose a new stop', false);
+  const lat = userLat || GENEVA[0], lng = userLng || GENEVA[1];
+  showStopPicker(lat, lng);
+}
+function callHelp(){ speak('Calling for help. Please wait.', true);
+  alert('Help requested. tpgFlex staff will assist you shortly.'); }
+
+// ── Step counter ──────────────────────────────────────────────────────────────
+let accelBuf=[], lastStepTime=0;
+window.DeviceMotionEvent && window.addEventListener('devicemotion', e => {
+  const a=e.accelerationIncludingGravity; if(!a) return;
+  const mag=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
+  accelBuf.push(mag); if(accelBuf.length>5) accelBuf.shift();
+  const avg=accelBuf.reduce((s,v)=>s+v,0)/accelBuf.length, now=Date.now();
+  if (avg>12 && now-lastStepTime>300) {
+    stepCount++; lastStepTime=now;
+    document.getElementById('step-counter-label').textContent = `${stepCount} steps`;
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CAMERA + OBSTACLE DETECTION
+// ══════════════════════════════════════════════════════════════════════════════
+const OBSTACLES = {
+  person:        { u:'high',   icon:'🚶', label:'Person',        say:'Person very close' },
+  car:           { u:'high',   icon:'🚗', label:'Car',           say:'Car on your' },
+  truck:         { u:'high',   icon:'🚛', label:'Truck',         say:'Truck on your' },
+  bus:           { u:'high',   icon:'🚌', label:'Bus',           say:'Bus on your' },
+  train:         { u:'high',   icon:'🚆', label:'Tram / Train',  say:'Tram on your' },
+  motorcycle:    { u:'high',   icon:'🏍️', label:'Motorcycle',    say:'Motorcycle on your' },
+  bicycle:       { u:'high',   icon:'🚲', label:'Bicycle',       say:'Bicycle on your' },
+  dog:           { u:'high',   icon:'🐕', label:'Dog',           say:'Dog on your' },
+  horse:         { u:'high',   icon:'🐴', label:'Horse',         say:'Horse on your' },
+  'traffic light':{ u:'medium', icon:'🚦', label:'Traffic Light', say:'Traffic light ahead. Check before crossing' },
+  'stop sign':   { u:'medium', icon:'🛑', label:'Stop Sign',     say:'Stop sign ahead' },
+  'fire hydrant':{ u:'medium', icon:'🚒', label:'Hydrant',       say:'Fire hydrant on your' },
+  'parking meter':{u:'medium', icon:'🅿️', label:'Post',          say:'Post on your' },
+  bench:         { u:'medium', icon:'🪑', label:'Bench',         say:'Bench on your' },
+  'potted plant':{ u:'medium', icon:'🪴', label:'Planter',       say:'Planter on your' },
+  chair:         { u:'low',    icon:'🪑', label:'Chair',         say:'Chair on your' },
+  'dining table':{ u:'low',    icon:'🪧', label:'Obstacle',      say:'Obstacle on your' },
+  suitcase:      { u:'low',    icon:'🧳', label:'Luggage',       say:'Luggage on your' },
+  backpack:      { u:'low',    icon:'🎒', label:'Bag',           say:'Bag on your' },
+  umbrella:      { u:'low',    icon:'☂️', label:'Umbrella',      say:'Umbrella on your' },
+};
+const URGENCY = {
+  high:   { bg:'rgba(220,38,38,.93)',  bd:'#fca5a5', cd:3000, minSize:0.18, sub:'Be careful!' },
+  medium: { bg:'rgba(202,138,4,.93)',  bd:'#fde68a', cd:4000, minSize:0.24, sub:'Caution' },
+  low:    { bg:'rgba(37,99,235,.88)',  bd:'#93c5fd', cd:6000, minSize:0.36, sub:'Heads up' },
+};
+const _lastSpokenAt = {};
+let cocoModel=null, detRunning=false, camStream=null;
+
+async function startCamera() {
+  const cam=document.getElementById('cam'), ph=document.getElementById('cam-ph'),
+        phT=document.getElementById('cam-ph-text');
+  ph.style.display='flex'; phT.textContent='Starting camera…';
+
+  // Try a list of constraints in order; first one that works wins.
+  async function tryGet(constraint) {
+    const s = await navigator.mediaDevices.getUserMedia({ video:constraint, audio:false });
+    return s;
+  }
+
+  try {
+    // Request permission first so device labels are populated
+    const tmp = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+    tmp.getTracks().forEach(t => t.stop());
+
+    const devices  = await navigator.mediaDevices.enumerateDevices();
+    const videoDev = devices.filter(d => d.kind === 'videoinput');
+
+    // Smart auto-pick: Iriun, else any non-built-in cam, else first/default
+    let pick = videoDev.find(d => /iriun/i.test(d.label));
+    if (!pick) pick = videoDev.find(d =>
+      d.label && !/facetime|built-in|hd camera|integrated/i.test(d.label));
+    if (!pick) pick = videoDev[0];
+
+    // Fallback chain: preferred device (exact) → preferred (ideal) →
+    // environment-facing → any camera. Avoids a hard fail when the
+    // chosen camera is briefly busy or the deviceId is stale.
+    const attempts = [];
+    if (pick) {
+      attempts.push({ deviceId:{ exact:pick.deviceId }, width:640, height:480 });
+      attempts.push({ deviceId:{ ideal:pick.deviceId }, width:640, height:480 });
+    }
+    attempts.push({ facingMode:{ ideal:'environment' }, width:640, height:480 });
+    attempts.push(true);
+
+    let lastErr;
+    for (const c of attempts) {
+      try { camStream = await tryGet(c); break; }
+      catch(err) { lastErr = err; camStream = null; }
+    }
+    if (!camStream) throw lastErr || new Error('no camera');
+
+    cam.srcObject = camStream;
+    await cam.play();
+    ph.style.display='none';
+    document.getElementById('ai-status').textContent='Loading AI…';
+    if (!cocoModel) cocoModel = await cocoSsd.load();
+    document.getElementById('ai-status').textContent='AI active · watching';
+    startDetection();
+  } catch(e) {
+    const name = e && e.name ? e.name : 'Error';
+    const busy = name === 'NotReadableError' || name === 'AbortError';
+    phT.textContent = busy
+      ? 'Camera in use by another app/tab — close it and tap to retry'
+      : 'Camera unavailable (' + name + ') — voice navigation still active';
+    document.getElementById('ai-status').textContent='Camera off';
+    console.error('[camera]', name, e);
+  }
+}
+function restartCamera() {
+  if (camStream) camStream.getTracks().forEach(t=>t.stop());
+  detRunning=false; startCamera();
+}
+function startDetection() {
+  detRunning=true;
+  const canvas=document.getElementById('det-canvas'),
+        ctx=canvas.getContext('2d'), cam=document.getElementById('cam');
+  async function loop() {
+    if (!detRunning || !cocoModel) return;
+    try {
+      ctx.drawImage(cam, 0, 0, 320, 240);
+      const preds = await cocoModel.detect(canvas);
+      const now=Date.now();
+      const cands = preds
+        .filter(p => OBSTACLES[p.class] && p.score > 0.55)
+        .map(p => ({ ...p, cfg:OBSTACLES[p.class], size:p.bbox[3]/240 }))
+        .sort((a,b) => b.size - a.size);
+      for (const c of cands) {
+        const ucfg = URGENCY[c.cfg.u];
+        if (c.size < ucfg.minSize) continue;
+        if (now - (_lastSpokenAt[c.class]||0) < ucfg.cd) continue;
+        const cx = c.bbox[0] + c.bbox[2]/2;
+        const side = cx < 107 ? 'left' : cx > 213 ? 'right' : 'ahead';
+        flashObstacle(c.cfg, ucfg, side);
+        const phrase = c.cfg.say.endsWith('your')
+          ? `${c.cfg.say} ${side}` : c.cfg.say;
+        speak(phrase, true);
+        _lastSpokenAt[c.class] = now;
+        break;  // one warning per cycle — most urgent/largest first
+      }
+    } catch(e) {}
+    setTimeout(loop, 500);
+  }
+  loop();
+}
+let _obsHideTimer=null;
+function flashObstacle(cfg, ucfg, side) {
+  const ov=document.getElementById('obstacle-overlay');
+  ov.style.background=ucfg.bg; ov.style.borderColor=ucfg.bd;
+  document.getElementById('obs-icon').textContent=cfg.icon;
+  document.getElementById('obs-main').textContent =
+    cfg.label + (cfg.say.endsWith('your') ? ` on your ${side}` : '');
+  document.getElementById('obs-sub').textContent=ucfg.sub;
+  ov.classList.add('show');
+  if (navigator.vibrate) navigator.vibrate(cfg.u==='high'?[300,100,300]:[180]);
+  clearTimeout(_obsHideTimer);
+  _obsHideTimer=setTimeout(()=>ov.classList.remove('show'), 2600);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+setTimeout(() => map.invalidateSize(), 200);
+// ── Profile integration ───────────────────────────────────────────────────────
+(async function applyUserProfile() {
+  try {
+    const prefs = await window.tpgProfile.applyUIMode();
+
+    // Personalised walking params
+    stepLengthMetres = prefs.step_length_metres || 0.75;
+    maxWalkingMetres = prefs.max_walking_distance || null;
+
+    // Patch speak() to use profile voice speed and language
+    const _speakOrig = window.speak || (() => {});
+    window.speak = function(text, urgent) {
+      if (!prefs.audio_feedback) return;
+      if (!window.speechSynthesis) return;
+      if (!urgent && window.speechSynthesis.speaking) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = prefs.voice_speed || 1.0;
+      u.lang = prefs.preferred_language === 'fr' ? 'fr-FR' : 'en-US';
+      window.speechSynthesis.speak(u);
+    };
+  } catch(_) { /* keep defaults if profile fetch fails */ }
+})();
+
+startCamera();
+
+// GPS timeout — if no position in 4 s, fall back to Geneva and proceed
+setTimeout(() => {
+  if (!gpsFirstFix) {
+    gpsFirstFix=true; userLat=GENEVA[0]; userLng=GENEVA[1];
+    gpsMarker.setLatLng(GENEVA); map.setView(GENEVA, 16);
+    if (hasUrlDest) {
+      setInstruction('Starting (no GPS)','','Demo route from Geneva',false);
+      startNavigation(urlDest.name, urlDest.lat, urlDest.lng);
+    } else {
+      showStopPicker(GENEVA[0], GENEVA[1]);
+    }
+  }
+}, 4000);
+</script>
+</body>
+</html>

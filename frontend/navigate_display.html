@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tpgFlex – Navigation Display</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0a0a0a;
+  color: white;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  grid-template-rows: 52px 1fr;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+header {
+  grid-column: 1/-1;
+  background: #131620;
+  border-bottom: 2px solid #3b82f6;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 14px;
+}
+.logo { font-size: 18px; font-weight: 800; }
+.logo span { color: #e63312; }
+.hdr-title { font-size: 13px; color: #94a3b8; }
+.hdr-status { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+#conn-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #6b7280; transition: background 0.4s;
+}
+#conn-dot.live { background: #4ade80; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+#conn-label { font-size: 12px; color: #9ca3af; transition: color 0.4s; }
+#conn-label.live { color: #4ade80; }
+
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
+aside {
+  background: #111827;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1e293b;
+  overflow: hidden;
+}
+
+/* Instruction */
+#instruction-panel {
+  padding: 16px;
+  border-bottom: 1px solid #1e293b;
+  background: #0f172a;
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.3s;
+}
+#instr-label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+#instr-text {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: #3b82f6;
+  transition: color 0.3s;
+  word-break: break-word;
+}
+
+/* Status circle */
+#circle-wrap { padding: 12px 16px; display: flex; justify-content: center; }
+#display-circle {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: #3b82f6;
+  transition: background 0.4s;
+  animation: circlePulse 2s ease-in-out infinite;
+}
+@keyframes circlePulse {
+  0%,100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.06); opacity: 0.85; }
+}
+
+/* Stats */
+#stats {
+  padding: 0 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.stat-card { background: #1e293b; border-radius: 8px; padding: 7px 10px; }
+.stat-label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+.stat-value { font-size: 15px; font-weight: 700; color: white; }
+
+/* ── Camera section ────────────────────────────────────────────────────────── */
+#camera-wrap {
+  flex: 1;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+}
+#camera-label {
+  font-size: 9px; color: #64748b;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+#cam-retry {
+  font-size: 10px; color: #3b82f6;
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+#cam-retry:hover { color: #60a5fa; }
+
+/* Video + obstacle overlay */
+#camera-div {
+  flex: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0a0f1a;
+  border: 2px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  position: relative;
+  transition: border-color 0.15s;
+}
+#camera-div.obstacle { border-color: #ef4444; }
+#camera-video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: none;
+}
+#camera-ph { color: #475569; font-size: 12px; text-align: center; padding: 8px; }
+#ai-status {
+  position: absolute;
+  bottom: 4px; left: 0; right: 0;
+  text-align: center;
+  font-size: 10px;
+  color: #94a3b8;
+  background: #00000066;
+  padding: 2px 0;
+}
+#obstacle-label {
+  position: absolute;
+  top: 4px; left: 4px;
+  background: #ef444488;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: none;
+}
+canvas#det-canvas { display: none; }
+
+/* ── Map ───────────────────────────────────────────────────────────────────── */
+#map { width: 100%; height: 100%; }
+
+/* Nearby stops */
+#nearby-panel {
+  position: absolute;
+  bottom: 12px; right: 12px;
+  background: #111827ee;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 200px;
+  z-index: 1000;
+}
+#nearby-title { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+.stop-row { font-size: 12px; color: #cbd5e1; padding: 2px 0; }
+.stop-row span { color: #64748b; margin-left: 4px; }
+main { position: relative; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span>tpg</span>Flex</div>
+  <div class="hdr-title">Blind Navigation Display</div>
+  <div class="hdr-status">
+    <div id="conn-dot"></div>
+    <span id="conn-label">Waiting for phone…</span>
+  </div>
+</header>
+
+<aside>
+  <div id="instruction-panel">
+    <div id="instr-label">Current instruction</div>
+    <div id="instr-text">—</div>
+  </div>
+
+  <div id="circle-wrap">
+    <div id="display-circle"></div>
+  </div>
+
+  <div id="stats">
+    <div class="stat-card">
+      <div class="stat-label">Steps</div>
+      <div class="stat-value" id="stat-steps">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Heading</div>
+      <div class="stat-value" id="stat-heading">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Latitude</div>
+      <div class="stat-value" id="stat-lat" style="font-size:11px">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Longitude</div>
+      <div class="stat-value" id="stat-lng" style="font-size:11px">—</div>
+    </div>
+  </div>
+
+  <div id="camera-wrap">
+    <div id="camera-label">
+      <span id="cam-source-label">📷 Camera</span>
+      <button onclick="initCamera()" style="
+        font-size:10px; color:#3b82f6; background:none;
+        border:1px solid #3b82f6; border-radius:4px;
+        cursor:pointer; padding:2px 7px;
+      ">↻ Refresh</button>
+    </div>
+    <div id="cam-buttons" style="
+      display:flex; flex-direction:column; gap:3px;
+      margin-bottom:4px; max-height:140px; overflow-y:auto;
+    "></div>
+    <div id="camera-div">
+      <video id="camera-video" playsinline muted autoplay></video>
+      <span id="camera-ph">Starting camera…</span>
+      <div id="ai-status">Loading AI…</div>
+      <div id="obstacle-label"></div>
+    </div>
+    <canvas id="det-canvas" width="320" height="240"></canvas>
+  </div>
+</aside>
+
+<main>
+  <div id="map"></div>
+  <div id="nearby-panel">
+    <div id="nearby-title">Nearby Stops</div>
+    <div id="nearby-list"><div class="stop-row" style="color:#475569">Waiting for GPS…</div></div>
+  </div>
+</main>
+
+
+<script>
+// ── Map ───────────────────────────────────────────────────────────────────────
+const map = L.map('map').setView([46.2044, 6.1432], 15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+fetch('/stops').then(r => r.json()).then(stops => {
+  stops.forEach(s => {
+    L.circleMarker([s.latitude, s.longitude], {
+      radius: 5, color: '#e63312', fillColor: '#e63312', fillOpacity: 1, weight: 2
+    }).addTo(map).bindPopup(`<b>${s.name}</b><br>Zone ${s.zone}`);
+  });
+}).catch(() => {});
+
+let userMarker = null, firstPan = true, routeLine = null, lastNearbyUpdate = 0;
+
+function updateUserMarker(lat, lng) {
+  if (!userMarker) {
+    userMarker = L.circleMarker([lat, lng], {
+      radius: 8, color: 'white', weight: 2, fillColor: '#3b82f6', fillOpacity: 1
+    }).addTo(map);
+  } else {
+    userMarker.setLatLng([lat, lng]);
+  }
+  if (firstPan) { map.setView([lat, lng], 17); firstPan = false; }
+}
+
+async function updateNearbyStops(lat, lng) {
+  if (Date.now() - lastNearbyUpdate < 10000) return;
+  lastNearbyUpdate = Date.now();
+  try {
+    const stops = await fetch(`/api/stops/nearby?lat=${lat}&lng=${lng}`).then(r => r.json());
+    document.getElementById('nearby-list').innerHTML =
+      stops.map(s => `<div class="stop-row">${s.name}<span>${s.distance_metres}m</span></div>`).join('');
+  } catch(e) {}
+}
+
+// ── Instruction color ─────────────────────────────────────────────────────────
+function applyInstructionColor(instr, hasObstacle) {
+  let color = '#3b82f6';
+  if (hasObstacle)                           color = '#ef4444';
+  else if (/arrived|destination/i.test(instr)) color = '#22c55e';
+  else if (/turn|right|left/i.test(instr))     color = '#f59e0b';
+  else if (/continue|straight/i.test(instr))   color = '#3b82f6';
+  document.getElementById('instr-text').style.color     = color;
+  document.getElementById('display-circle').style.background = color;
+}
+
+// ── Obstacle flash ────────────────────────────────────────────────────────────
+let obstacleTimer = null;
+function flashObstacle(label) {
+  const div = document.getElementById('camera-div');
+  const lbl = document.getElementById('obstacle-label');
+  div.classList.add('obstacle');
+  lbl.textContent = '⚠ ' + label;
+  lbl.style.display = 'block';
+  clearTimeout(obstacleTimer);
+  obstacleTimer = setTimeout(() => {
+    div.classList.remove('obstacle');
+    lbl.style.display = 'none';
+  }, 2000);
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+let cocoModel = null;
+let detectionRunning = false;
+const OBSTACLE_CLASSES = ['person','car','truck','bicycle','motorcycle','chair','dining table','potted plant','stop sign'];
+let lastObstacleTime = 0;
+
+let activeDeviceId = null;
+
+function renderCamButtons(devices) {
+  const wrap = document.getElementById('cam-buttons');
+  wrap.innerHTML = '';
+  devices.forEach((d, i) => {
+    const btn = document.createElement('button');
+    const label = d.label || `Camera ${i + 1}`;
+    btn.dataset.id = d.deviceId;
+    btn.textContent = label;
+    btn.style.cssText = `
+      background: ${d.deviceId === activeDeviceId ? '#3b82f6' : '#1e293b'};
+      color: ${d.deviceId === activeDeviceId ? 'white' : '#cbd5e1'};
+      border: 1px solid ${d.deviceId === activeDeviceId ? '#60a5fa' : '#334155'};
+      border-radius: 6px; padding: 6px 10px;
+      font-size: 11px; font-weight: 600;
+      cursor: pointer; text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    `;
+    btn.onclick = () => startCameraById(d.deviceId);
+    wrap.appendChild(btn);
+  });
+}
+
+async function initCamera() {
+  const video = document.getElementById('camera-video');
+  const ph    = document.getElementById('camera-ph');
+
+  if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+  detectionRunning = false;
+  video.style.display = 'none';
+  ph.style.display = 'block';
+  ph.textContent = 'Loading cameras…';
+
+  // Request permission so labels are populated
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    tmp.getTracks().forEach(t => t.stop());
+  } catch(e) {
+    ph.textContent = 'Camera permission denied';
+    return;
+  }
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const videoDev = devices.filter(d => d.kind === 'videoinput');
+  if (!videoDev.length) { ph.textContent = 'No cameras found'; return; }
+
+  renderCamButtons(videoDev);
+
+  // Smart auto-pick: Iriun, else any non-built-in cam, else first
+  let pick = videoDev.find(d => /iriun/i.test(d.label));
+  if (!pick) pick = videoDev.find(d =>
+    d.label && !/facetime|built-in|hd camera|integrated/i.test(d.label));
+  if (!pick) pick = videoDev[0];
+
+  await startCameraById(pick.deviceId);
+}
+
+async function startCameraById(deviceId) {
+  const video  = document.getElementById('camera-video');
+  const ph     = document.getElementById('camera-ph');
+  const srcLbl = document.getElementById('cam-source-label');
+
+  if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+  detectionRunning = false;
+  video.style.display = 'none';
+  ph.style.display = 'block';
+  ph.textContent = 'Switching…';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: deviceId }, width: 640, height: 480 },
+      audio: false
+    });
+    video.srcObject = stream;
+    video.style.display = 'block';
+    ph.style.display = 'none';
+    activeDeviceId = deviceId;
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDev = devices.filter(d => d.kind === 'videoinput');
+    renderCamButtons(videoDev);
+    const me = videoDev.find(d => d.deviceId === deviceId);
+    const label = (me && me.label) || 'Camera';
+    srcLbl.textContent = '📷 ' + label.split('(')[0].trim();
+
+    document.getElementById('ai-status').textContent = 'Loading AI…';
+    if (!cocoModel) cocoModel = await cocoSsd.load();
+    document.getElementById('ai-status').textContent = 'AI active';
+    startDetection();
+  } catch(e) {
+    ph.textContent = `Camera error: ${e.message}`;
+  }
+}
+
+function startDetection() {
+  detectionRunning = true;
+  const canvas = document.getElementById('det-canvas');
+  const ctx    = canvas.getContext('2d');
+  const video  = document.getElementById('camera-video');
+
+  async function detect() {
+    if (!detectionRunning || !cocoModel) return;
+    ctx.drawImage(video, 0, 0, 320, 240);
+    try {
+      const preds = await cocoModel.detect(canvas);
+      const now = Date.now();
+      for (const p of preds) {
+        if (!OBSTACLE_CLASSES.includes(p.class) || p.score < 0.6) continue;
+        const size = p.bbox[3] / 240;
+        if (size > 0.5 && (now - lastObstacleTime) > 3000) {
+          const side = p.bbox[0] < 160 ? 'left' : 'right';
+          flashObstacle(`${p.class} on ${side}`);
+          applyInstructionColor(document.getElementById('instr-text').textContent, true);
+          lastObstacleTime = now;
+          // Clear obstacle color after 2s
+          setTimeout(() => applyInstructionColor(document.getElementById('instr-text').textContent, false), 2000);
+        } else if (size > 0.25 && (now - lastObstacleTime) > 3000) {
+          flashObstacle(`${p.class} nearby`);
+          lastObstacleTime = now;
+        }
+      }
+    } catch(e) {}
+    setTimeout(detect, 500);
+  }
+  detect();
+}
+
+// ── WebSocket from phone ──────────────────────────────────────────────────────
+let ws;
+
+function setConnected(live) {
+  document.getElementById('conn-dot').classList.toggle('live', live);
+  document.getElementById('conn-label').textContent = live ? 'Phone connected' : 'Waiting for phone…';
+  document.getElementById('conn-label').classList.toggle('live', live);
+}
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${window.location.host}/ws/navigate/display`);
+  ws.onopen  = () => setConnected(true);
+  ws.onclose = () => { setConnected(false); setTimeout(connectWS, 2000); };
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = async e => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+
+    // Walk-to-pickup route (blue dashed)
+    if (msg.type === 'route' && msg.geometry) {
+      if (routeLine) map.removeLayer(routeLine);
+      const latlngs = msg.geometry.map(c => [c[1], c[0]]);
+      routeLine = L.polyline(latlngs, { color: '#3b82f6', weight: 4, opacity: 0.7, dashArray: '8,4' }).addTo(map);
+      map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+      return;
+    }
+
+    // Ride route to final stop (green solid) — triggered when user arrives at pickup
+    if (msg.type === 'show_final_route') {
+      try {
+        const r = await fetch(`/api/route?from_lat=${msg.fromLat}&from_lng=${msg.fromLng}&to_lat=${msg.destLat}&to_lng=${msg.destLng}`);
+        const data = await r.json();
+        if (data.routes) {
+          if (routeLine) map.removeLayer(routeLine);
+          const latlngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+          routeLine = L.polyline(latlngs, { color: '#22c55e', weight: 5, opacity: 0.85 }).addTo(map);
+          // Add destination marker
+          L.circleMarker([msg.destLat, msg.destLng], {
+            radius: 10, color: 'white', weight: 2, fillColor: '#22c55e', fillOpacity: 1
+          }).addTo(map).bindPopup(`<b>🏁 ${msg.destName}</b>`).openPopup();
+          map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+          document.getElementById('instr-text').textContent = `Ride to ${msg.destName}`;
+          applyInstructionColor('arrived', false);
+        }
+      } catch(e) {}
+      return;
+    }
+
+    if (msg.type !== 'update') return;
+
+    // Instruction
+    const instr = msg.instruction || '—';
+    document.getElementById('instr-text').textContent = instr;
+    if (!detectionRunning) applyInstructionColor(instr, false);
+
+    // Stats
+    document.getElementById('stat-steps').textContent   = msg.steps ?? '—';
+    document.getElementById('stat-heading').textContent = msg.heading != null ? Math.round(msg.heading) + '°' : '—';
+    const gps = msg.gps || {};
+    document.getElementById('stat-lat').textContent = gps.lat != null ? gps.lat.toFixed(4) : '—';
+    document.getElementById('stat-lng').textContent = gps.lng != null ? gps.lng.toFixed(4) : '—';
+
+    if (gps.lat && gps.lng) {
+      updateUserMarker(gps.lat, gps.lng);
+      updateNearbyStops(gps.lat, gps.lng);
+    }
+  };
+}
+
+// ── Own GPS for nearby stops (fallback when no phone connected) ───────────────
+let ownGPSActive = false;
+navigator.geolocation && navigator.geolocation.watchPosition(
+  pos => {
+    const { latitude: lat, longitude: lng } = pos.coords;
+    updateUserMarker(lat, lng);
+    updateNearbyStops(lat, lng);
+    ownGPSActive = true;
+  },
+  () => {
+    if (!ownGPSActive) {
+      document.getElementById('nearby-list').innerHTML =
+        '<div class="stop-row" style="color:#475569">GPS unavailable on this device</div>';
+    }
+  },
+  { enableHighAccuracy: true, maximumAge: 5000 }
+);
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initCamera();
+connectWS();
+</script>
+</body>
+</html>

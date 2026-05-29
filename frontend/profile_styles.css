@@ -1,0 +1,101 @@
+/* ── tpgFlex profile UI modes ─────────────────────────────────────────────── */
+
+/* Voice-first (blind users): hide non-essential UI, maximise touch targets */
+body.ui-voice_first .secondary-content { display: none !important; }
+body.ui-voice_first button { min-height: 80px; font-size: 1.5em; }
+body.ui-voice_first input  { font-size: 1.3em; min-height: 60px; }
+
+/* Visual-first (deaf users): audio cues replaced by visible indicators */
+body.ui-visual_first .audio-only-element { display: none !important; }
+body.ui-visual_first .visual-indicator   { display: block !important; }
+
+/* Simplified (elderly / low digital literacy): bigger everything, fewer options */
+body.ui-simplified button { min-height: 70px; font-size: 1.3em; }
+body.ui-simplified input  { font-size: 1.2em; min-height: 56px; }
+body.ui-simplified .advanced-feature { display: none !important; }
+
+/* High-contrast override */
+body.high-contrast {
+  background: #000 !important;
+  color: #fff !important;
+}
+body.high-contrast * { border-color: #fff !important; }
+body.high-contrast button {
+  border: 3px solid #fff !important;
+  background: #000 !important;
+  color: #fff !important;
+}
+body.high-contrast a { color: #ffff00 !important; }
+
+/* Large text */
+body.large-text       { font-size: 1.25em; }
+body.large-text small { font-size: 1em; }
+
+/* Minimum touch target */
+body.ui-voice_first button,
+body.ui-simplified button,
+body.large-text button { min-height: 60px; }
+
+/* ── Toast notifications ──────────────────────────────────────────────────── */
+.tpg-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #fff;
+  padding: 16px 24px;
+  border-radius: 10px;
+  z-index: 9999;
+  font-size: 16px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  animation: tpgSlideDown .3s ease-out;
+  max-width: 90vw;
+  text-align: center;
+  pointer-events: none;
+}
+.tpg-toast-info    { border-left: 4px solid #3b82f6; }
+.tpg-toast-success { border-left: 4px solid #22c55e; }
+.tpg-toast-warning { border-left: 4px solid #f59e0b; }
+.tpg-toast-error   { border-left: 4px solid #ef4444; }
+
+@keyframes tpgSlideDown {
+  from { transform: translate(-50%, -120%); opacity: 0; }
+  to   { transform: translate(-50%, 0);     opacity: 1; }
+}
+
+/* ── Profile banner (shown when no profile set) ───────────────────────────── */
+.tpg-profile-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1d27;
+  border: 1px solid #7c3aed;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 13px;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 8000;
+  box-shadow: 0 4px 24px rgba(124,58,237,.3);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+.tpg-profile-banner a {
+  color: #7c3aed;
+  font-weight: 700;
+  text-decoration: none;
+}
+.tpg-profile-banner a:hover { text-decoration: underline; }
+.tpg-banner-close {
+  cursor: pointer;
+  color: #6b7280;
+  margin-left: 4px;
+  font-size: 16px;
+  background: none;
+  border: none;
+  line-height: 1;
+}

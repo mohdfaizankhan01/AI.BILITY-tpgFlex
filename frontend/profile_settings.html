@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tpgFlex – Profile Settings</title>
+<link rel="stylesheet" href="/static/profile_styles.css">
+<script src="/static/profile_manager.js"></script>
+<style>
+:root {
+  --red:    #e63312;
+  --dark:   #0f1117;
+  --card:   #1a1d27;
+  --card2:  #1e2235;
+  --border: #ffffff12;
+  --green:  #4ade80;
+  --orange: #f59e0b;
+  --purple: #7c3aed;
+  --muted:  #6b7280;
+  --text:   #e2e8f0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--dark);
+  color: var(--text);
+  min-height: 100vh;
+}
+header {
+  background: #131620;
+  border-bottom: 2px solid var(--red);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo { font-size: 20px; font-weight: 800; }
+.logo span { color: var(--red); }
+.back-link {
+  margin-left: auto;
+  padding: 6px 14px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.back-link:hover { border-color: var(--red); }
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Profile type header */
+.profile-hero {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hero-icon { font-size: 52px; }
+.hero-label { font-size: 22px; font-weight: 800; }
+.hero-sub   { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+/* Section headings */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Form elements */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.form-row label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.form-row input[type="text"],
+.form-row input[type="tel"],
+.form-row select {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  min-height: 44px;
+}
+.form-row input:focus,
+.form-row select:focus { border-color: var(--purple); }
+
+.slider-wrap {
+  display: flex; align-items: center; gap: 10px;
+}
+.slider-wrap input[type="range"] {
+  flex: 1; accent-color: var(--purple); height: 4px;
+}
+.slider-val { font-size: 13px; font-weight: 700; min-width: 40px; text-align: right; }
+
+.toggle-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+  cursor: pointer; min-height: 52px;
+}
+.toggle-row:last-child { border-bottom: none; }
+.toggle-icon { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+.toggle-label { flex: 1; font-size: 14px; }
+.toggle-sub   { font-size: 11px; color: var(--muted); }
+.toggle-check {
+  width: 22px; height: 22px;
+  border: 2px solid var(--border); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 14px; background: var(--card);
+  transition: background .15s, border-color .15s;
+}
+.toggle-check.on { background: var(--green); border-color: var(--green); color: #000; }
+
+/* Change profile type */
+.change-profile-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px; font-weight: 600;
+}
+.change-profile-toggle .arrow { transition: transform .2s; }
+.change-profile-toggle.open .arrow { transform: rotate(180deg); }
+.change-profile-panel {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.change-profile-panel.visible { display: flex; }
+.profile-type-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 8px;
+  cursor: pointer; transition: background .1s;
+  border: 1px solid transparent;
+}
+.profile-type-row:hover { background: var(--card2); }
+.profile-type-row.current { border-color: var(--purple); background: #7c3aed15; }
+.profile-type-row .pt-icon  { font-size: 24px; }
+.profile-type-row .pt-label { font-size: 14px; font-weight: 600; }
+.profile-type-row .pt-cur   { font-size: 11px; color: var(--purple); margin-left: auto; }
+.change-warning {
+  font-size: 12px; color: var(--orange);
+  padding: 8px 12px;
+  background: #f59e0b15;
+  border-radius: 6px;
+  display: none;
+}
+.change-warning.visible { display: block; }
+
+/* Action buttons */
+.btn-save {
+  width: 100%;
+  min-height: 60px;
+  background: var(--purple);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.btn-save:hover { opacity: .88; }
+.btn-save:disabled { opacity: .4; cursor: default; }
+
+.btn-delete {
+  width: 100%;
+  min-height: 52px;
+  background: none;
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-delete:hover { background: #e6331215; }
+
+/* Confirmation dialog */
+#confirmOverlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+}
+#confirmOverlay.open { display: flex; }
+#confirmBox {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+#confirmBox h3 { font-size: 18px; font-weight: 800; }
+#confirmBox p  { font-size: 14px; color: var(--muted); }
+.confirm-btns  { display: flex; gap: 10px; }
+.confirm-btns button {
+  flex: 1; min-height: 48px; border-radius: 10px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.confirm-cancel { background: var(--card2); border: 1px solid var(--border); color: var(--text); }
+.confirm-delete { background: var(--red);   border: none; color: #fff; }
+
+.loading-state {
+  text-align: center; padding: 60px 24px;
+  color: var(--muted); font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span>tpg</span>Flex</div>
+  <span style="font-size:13px;color:#6b7280">Profile Settings</span>
+  <a href="/" class="back-link">← Back</a>
+</header>
+
+<main id="mainContent">
+  <div class="loading-state">Loading your profile…</div>
+</main>
+
+<!-- Delete confirmation dialog -->
+<div id="confirmOverlay">
+  <div id="confirmBox">
+    <h3>Delete profile?</h3>
+    <p>This will remove all your saved preferences. You can set a new profile at any time.</p>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="closeConfirm()">Cancel</button>
+      <button class="confirm-delete" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const userId = window.tpgProfile.getUserId();
+let currentData = null;
+let newProfileType = null;
+
+// ── Load current profile ──────────────────────────────────────────────────
+
+async function loadProfile() {
+  try {
+    const res  = await fetch(`/api/profile/${userId}`);
+    currentData = await res.json();
+    renderSettings(currentData);
+  } catch(e) {
+    document.getElementById('mainContent').innerHTML =
+      '<div class="loading-state" style="color:#e63312">Could not load profile.</div>';
+  }
+}
+
+// ── Render the settings form ───────────────────────────────────────────────
+
+async function renderSettings(d) {
+  const profilesRes = await fetch('/api/profiles/available');
+  const profiles    = await profilesRes.json();
+  const ap  = d.accessibility_profile || 'standard';
+  const pdef = profiles.find(p => p.key === ap) || { icon: '👤', label: 'Standard user' };
+
+  const profileTypeOptions = profiles.map(p => `
+    <div class="profile-type-row ${p.key === ap ? 'current' : ''}"
+         onclick="selectNewProfile('${p.key}', '${p.icon}', this)"
+         data-key="${p.key}">
+      <span class="pt-icon">${p.icon}</span>
+      <span class="pt-label">${p.label}</span>
+      ${p.key === ap ? '<span class="pt-cur">Current</span>' : ''}
+    </div>`).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="profile-hero">
+      <div class="hero-icon" id="heroIcon">${pdef.icon}</div>
+      <div>
+        <div class="hero-label" id="heroLabel">${pdef.label}</div>
+        <div class="hero-sub">${userId}</div>
+      </div>
+    </div>
+
+    <!-- Personal info -->
+    <div class="section">
+      <div class="section-title">Personal</div>
+      <div class="form-row">
+        <label for="displayName">Display name</label>
+        <input id="displayName" type="text" value="${escHtml(d.display_name||'')}" placeholder="e.g. Marie" aria-label="Display name">
+      </div>
+      <div class="form-row">
+        <label for="langSelect">Preferred language</label>
+        <select id="langSelect" aria-label="Preferred language">
+          <option value="fr" ${d.preferred_language==='fr'?'selected':''}>Français</option>
+          <option value="en" ${d.preferred_language==='en'?'selected':''}>English</option>
+          <option value="de" ${d.preferred_language==='de'?'selected':''}>Deutsch</option>
+          <option value="it" ${d.preferred_language==='it'?'selected':''}>Italiano</option>
+          <option value="es" ${d.preferred_language==='es'?'selected':''}>Español</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label for="emergency">Emergency contact</label>
+        <input id="emergency" type="tel" value="${escHtml(d.emergency_contact||'')}" placeholder="+41 79 …" aria-label="Emergency contact">
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="section">
+      <div class="section-title">Navigation</div>
+      <div class="form-row">
+        <label>Max walking distance</label>
+        <div class="slider-wrap">
+          <span style="font-size:12px;color:var(--muted)">100m</span>
+          <input type="range" id="walkDist" min="100" max="1000" step="50"
+                 value="${d.max_walking_distance||500}" aria-label="Maximum walking distance"
+                 oninput="document.getElementById('walkDistVal').textContent=this.value+'m'">
+          <span style="font-size:12px;color:var(--muted)">1000m</span>
+          <span class="slider-val" id="walkDistVal">${d.max_walking_distance||500}m</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Step length: <b>${d.step_length_metres||0.75} m</b></label>
+        <div style="font-size:12px;color:var(--muted)">
+          Recalibrate via <a href="/static/profile_setup.html" style="color:var(--purple)">profile setup</a>.
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback -->
+    <div class="section">
+      <div class="section-title">Feedback</div>
+      <div class="form-row">
+        <label>Voice speed</label>
+        <div class="slider-wrap">
+          <span style="font-size:12px;color:var(--muted)">Slow</span>
+          <input type="range" id="voiceSpeed" min="0.5" max="1.5" step="0.05"
+                 value="${d.voice_speed||1.0}" aria-label="Voice speed"
+                 oninput="document.getElementById('voiceSpeedVal').textContent=parseFloat(this.value).toFixed(2)+'×'">
+          <span style="font-size:12px;color:var(--muted)">Fast</span>
+          <span class="slider-val" id="voiceSpeedVal">${(d.voice_speed||1).toFixed(2)}×</span>
+        </div>
+      </div>
+
+      <div class="form-row" style="gap:0">
+        ${toggleRow('highContrast', '🎨', 'High contrast', '', d.high_contrast)}
+        ${toggleRow('largeTxt',     '🔠', 'Large text',     '', d.large_text)}
+        ${toggleRow('vibFeedback',  '📳', 'Vibration',      '', d.haptic_feedback)}
+        ${toggleRow('audFeedback',  '🔊', 'Audio (TTS)',    '', d.audio_feedback)}
+        ${toggleRow('visNotify',    '💬', 'Visual notifications','', d.visual_feedback)}
+        ${toggleRow('autoAnnounce', '📣', 'Auto-announce stops',  '', d.auto_announce_stops)}
+      </div>
+    </div>
+
+    <!-- Change profile type -->
+    <div class="section">
+      <div class="section-title">Profile type</div>
+      <div class="change-profile-toggle" onclick="toggleChangePanel(this)" id="changePanelToggle">
+        <span>${pdef.icon} ${pdef.label}</span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="change-profile-panel" id="changePanel">
+        <div class="change-warning" id="changeWarning">
+          ⚠️ Changing your profile type will reset feedback preferences to the new profile's defaults.
+        </div>
+        ${profileTypeOptions}
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <button class="btn-save" onclick="saveSettings()">Save changes</button>
+      <button class="btn-delete" onclick="showConfirm()">🗑 Delete my profile</button>
+    </div>
+  `;
+}
+
+function toggleRow(id, icon, label, sub, isOn) {
+  const on = !!isOn;
+  return `
+    <div class="toggle-row" onclick="toggle('${id}')" role="checkbox"
+         tabindex="0" aria-label="${label}" aria-checked="${on}">
+      <span class="toggle-icon">${icon}</span>
+      <div>
+        <div class="toggle-label">${label}</div>
+        ${sub ? `<div class="toggle-sub">${sub}</div>` : ''}
+      </div>
+      <div class="toggle-check ${on ? 'on' : ''}" id="${id}">✓</div>
+    </div>`;
+}
+
+// ── Toggles ───────────────────────────────────────────────────────────────
+
+function toggle(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('on');
+}
+function isOn(id) {
+  const el = document.getElementById(id);
+  return el ? el.classList.contains('on') : false;
+}
+
+// ── Change profile type panel ─────────────────────────────────────────────
+
+function toggleChangePanel(btn) {
+  const panel = document.getElementById('changePanel');
+  panel.classList.toggle('visible');
+  btn.classList.toggle('open');
+}
+
+function selectNewProfile(key, icon, row) {
+  newProfileType = key;
+  document.querySelectorAll('.profile-type-row').forEach(r => {
+    r.classList.toggle('current', r === row);
+  });
+  document.getElementById('heroIcon').textContent  = icon;
+  document.getElementById('changePanelToggle').querySelector('span').textContent =
+    icon + ' ' + row.querySelector('.pt-label').textContent;
+  const w = document.getElementById('changeWarning');
+  if (w) w.classList.add('visible');
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────
+
+async function saveSettings() {
+  const payload = {};
+  if (newProfileType && newProfileType !== currentData.accessibility_profile) {
+    payload.accessibility_profile = newProfileType;
+  }
+  const name = (document.getElementById('displayName')?.value || '').trim();
+  if (name !== (currentData.display_name || '')) payload.display_name = name || null;
+  payload.preferred_language   = document.getElementById('langSelect')?.value;
+  payload.voice_speed          = parseFloat(document.getElementById('voiceSpeed')?.value || 1);
+  payload.max_walking_distance = parseInt(document.getElementById('walkDist')?.value || 500);
+  payload.high_contrast        = isOn('highContrast');
+  payload.large_text           = isOn('largeTxt');
+  payload.haptic_feedback      = isOn('vibFeedback');
+  payload.audio_feedback       = isOn('audFeedback');
+  payload.visual_feedback      = isOn('visNotify');
+  payload.auto_announce_stops  = isOn('autoAnnounce');
+  const ec = document.getElementById('emergency')?.value.trim();
+  if (ec !== undefined) payload.emergency_contact = ec || null;
+
+  try {
+    const res = await fetch(`/api/profile/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error();
+    window.tpgProfile.invalidateCache();
+    await window.tpgProfile.notify('Settings saved!', 'success');
+    setTimeout(() => { window.location.href = '/'; }, 1000);
+  } catch(_) {
+    window.tpgProfile.notify('Could not save. Please try again.', 'error');
+  }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────
+
+function showConfirm()  { document.getElementById('confirmOverlay').classList.add('open'); }
+function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('open'); }
+
+async function confirmDelete() {
+  try {
+    await fetch(`/api/profile/${userId}`, { method: 'DELETE' });
+    localStorage.removeItem('tpgflex_user_id');
+    window.tpgProfile.invalidateCache();
+    await window.tpgProfile.notify('Profile deleted.', 'info');
+    setTimeout(() => { window.location.href = '/static/profile_setup.html'; }, 1000);
+  } catch(_) {
+    closeConfirm();
+    window.tpgProfile.notify('Could not delete profile.', 'error');
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+
+loadProfile();
+</script>
+</body>
+</html>

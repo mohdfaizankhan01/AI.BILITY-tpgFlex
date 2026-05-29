@@ -1,0 +1,282 @@
+"""
+Stop Evaluator — scores each tpgFlex stop across five dimensions using
+Epicollect survey observations stored in stop_observations table.
+"""
+
+import unicodedata
+from backend.database import get_conn
+
+# ── Item weight dictionaries ───────────────────────────────────────────────────
+
+WHEELCHAIR_ITEMS = {
+    "Surface dure et stable": 3,
+    "Bordure abaissée présente": 3,
+    "Embarquement de plain-pied avec le véhicule": 4,
+    "Espace suffisant pour manœuvrer un fauteuil": 3,
+    "Pente du chemin": -1,
+    "Surface meuble ou irrégulière": -3,
+    "Forte pente": -4,
+    "Obstacles dans la zone d'attente": -2,
+    "Abri disponible": 1,
+}
+
+BLIND_ITEMS = {
+    "Bandes podotactiles de guidage": 4,
+    "Bandes podotactiles d'éveil au bord": 4,
+    "Signalétique à fort contraste visuel": 2,
+    "Nom de l'arrêt clairement visible et lisible": 2,
+    "Information en braille": 2,
+    "Affichage temps réel (PID)": 1,
+    "Zone calme": 1,
+    "Obstacles dans la zone d'attente": -2,
+    "Route à vitesse élevée (> 50 km/h)": -3,
+}
+
+DEAF_ITEMS = {
+    "Affichage temps réel (PID)": 4,
+    "Nom de l'arrêt clairement visible et lisible": 3,
+    "Pictogrammes universels": 3,
+    "Plan du réseau": 2,
+    "Signalétique à fort contraste visuel": 2,
+}
+
+LOW_DIGITAL_ITEMS = {
+    "Affichage temps réel (PID)": 3,
+    "Pictogrammes universels": 3,
+    "Plan du réseau": 3,
+    "Nom de l'arrêt clairement visible et lisible": 2,
+    "Signalétique à fort contraste visuel": 2,
+}
+
+ELDERLY_ITEMS = {
+    "Banc disponible": 3,
+    "Abri disponible": 2,
+    "Éclairage suffisant": 2,
+    "Surface dure et stable": 2,
+    "Pente du chemin": -1,
+    "Forte pente": -3,
+    "Surface meuble ou irrégulière": -2,
+    "Obstacles dans la zone d'attente": -2,
+}
+
+SAFETY_ITEMS = {
+    "Éclairage public présent": 3,
+    "Éclairage suffisant la nuit": 3,
+    "Zone fréquentée (passants réguliers)": 2,
+    "Habitation à moins de 200m": 2,
+    "Commerce ou pharmacie proche": 2,
+    "Visibilité réciproque conducteur-piéton": 3,
+    "Passage piéton proche": 2,
+    "Zone sombre": -3,
+    "Zone isolée": -3,
+    "Couverture mobile faible": -2,
+    "Route à vitesse élevée (> 50 km/h)": -3,
+}
+
+EXPERIENCE_ITEMS = {
+    "Abri disponible": 3,
+    "Banc disponible": 2,
+    "Poubelle disponible": 1,
+    "Zone calme": 2,
+    "Point de repère agréable": 1,
+    "Stationnement vélo proche": 1,
+    "Plusieurs zones d'attente confuses": -3,
+}
+
+PROFILE_MAP = {
+    "wheelchair": WHEELCHAIR_ITEMS,
+    "blind": BLIND_ITEMS,
+    "deaf": DEAF_ITEMS,
+    "low_digital": LOW_DIGITAL_ITEMS,
+    "elderly": ELDERLY_ITEMS,
+}
+
+
+# ── Table bootstrap — runs once on import ─────────────────────────────────────
+
+def _bootstrap():
+    conn = get_conn()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS stop_observations (
+            obs_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            stop_id      TEXT NOT NULL,
+            block_type   TEXT NOT NULL,
+            checked_item TEXT NOT NULL,
+            source       TEXT DEFAULT 'epicollect',
+            submitted_at TEXT,
+            FOREIGN KEY (stop_id) REFERENCES stops(stop_id)
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_obs_stop  ON stop_observations(stop_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_obs_block ON stop_observations(block_type)"
+    )
+    conn.commit()
+    conn.close()
+
+_bootstrap()
+
+
+def _maybe_seed_demo():
+    """Auto-seed demo observations if the table is empty."""
+    conn = get_conn()
+    count = conn.execute("SELECT COUNT(*) FROM stop_observations").fetchone()[0]
+    conn.close()
+    if count == 0:
+        try:
+            from backend.mock_data.seed_observations import seed_observations
+            seed_observations()
+        except Exception as e:
+            print(f"[stop_evaluator] demo seed skipped: {e}")
+
+_maybe_seed_demo()
+
+
+# ── Core helpers ──────────────────────────────────────────────────────────────
+
+def normalize_label(text: str) -> str:
+    """Lowercase, strip whitespace, drop accent diacritics, truncate at 30 chars."""
+    text = text.strip().lower()
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    return text[:30]
+
+
+def score_block(checked_items: list[str], item_weights: dict) -> dict:
+    """
+    Compute a normalized [0,1] score for one block (accessibility/safety/experience).
+    Matching is done via normalize_label so accents and small typos are forgiven.
+    """
+    norm_checked = {normalize_label(i) for i in checked_items}
+
+    max_possible = sum(w for w in item_weights.values() if w > 0)
+    min_possible = sum(w for w in item_weights.values() if w < 0)
+    span = max_possible - min_possible  # always > 0 given our dicts
+
+    raw = 0
+    matched_positives: list[str] = []
+    matched_negatives: list[str] = []
+
+    for item, weight in item_weights.items():
+        norm_item = normalize_label(item)
+        # Direct match or prefix-of-30 overlap
+        if norm_item in norm_checked or any(
+            norm_item.startswith(c[:30]) or c[:30].startswith(norm_item[:20])
+            for c in norm_checked
+        ):
+            raw += weight
+            if weight > 0:
+                matched_positives.append(item)
+            else:
+                matched_negatives.append(item)
+
+    normalized = max(0.0, min(1.0, (raw - min_possible) / span)) if span else 0.5
+
+    if normalized >= 0.70:
+        label, color = "Good", "green"
+    elif normalized >= 0.40:
+        label, color = "Fair", "orange"
+    else:
+        label, color = "Poor", "red"
+
+    return {
+        "raw_score": raw,
+        "normalized": round(normalized, 3),
+        "label": label,
+        "color": color,
+        "matched_items": matched_positives + matched_negatives,
+        "matched_positives": matched_positives,
+        "matched_negatives": matched_negatives,
+        "positives_matched": len(matched_positives),
+        "negatives_matched": len(matched_negatives),
+    }
+
+
+def evaluate_accessibility(checked_items: list[str], profile: str = "all") -> dict:
+    if profile == "all":
+        results = {
+            name: score_block(checked_items, weights)
+            for name, weights in PROFILE_MAP.items()
+        }
+        worst = min(results.values(), key=lambda r: r["normalized"])
+        worst["profile_breakdown"] = {k: v["label"] for k, v in results.items()}
+        return worst
+
+    weights = PROFILE_MAP.get(profile)
+    if not weights:
+        raise ValueError(f"Unknown profile '{profile}'. Choose from: {list(PROFILE_MAP)}")
+    return score_block(checked_items, weights)
+
+
+def evaluate_safety(checked_items: list[str]) -> dict:
+    return score_block(checked_items, SAFETY_ITEMS)
+
+
+def evaluate_experience(checked_items: list[str]) -> dict:
+    return score_block(checked_items, EXPERIENCE_ITEMS)
+
+
+# ── Main evaluator ────────────────────────────────────────────────────────────
+
+def evaluate_stop(stop_id: str, profile: str = "all") -> dict:
+    conn = get_conn()
+
+    stop_row = conn.execute(
+        "SELECT stop_id, name, latitude, longitude FROM stops WHERE stop_id = ?",
+        (stop_id,),
+    ).fetchone()
+
+    if not stop_row:
+        conn.close()
+        return {"error": f"Stop '{stop_id}' not found"}
+
+    obs_rows = conn.execute(
+        "SELECT block_type, checked_item FROM stop_observations WHERE stop_id = ?",
+        (stop_id,),
+    ).fetchall()
+    conn.close()
+
+    survey_count = len(obs_rows)
+
+    blocks: dict[str, list[str]] = {
+        "accessibility": [],
+        "safety": [],
+        "experience": [],
+    }
+    for row in obs_rows:
+        bt = row["block_type"]
+        if bt in blocks:
+            blocks[bt].append(row["checked_item"])
+
+    # Map UI profile names → internal profile keys
+    _profile_alias = {
+        "motor-wheelchair": "wheelchair",
+        "manual-wheelchair": "wheelchair",
+    }
+    internal_profile = _profile_alias.get(profile, profile)
+
+    accessibility = evaluate_accessibility(blocks["accessibility"], internal_profile)
+    safety        = evaluate_safety(blocks["safety"])
+    experience    = evaluate_experience(blocks["experience"])
+
+    punctuality = {"label": "Good", "color": "green", "value": "On time 87%"}
+    regularity  = {"label": "Every 15-20 min", "sublabel": "(Usually)", "color": "purple"}
+
+    return {
+        "stop_id":   stop_row["stop_id"],
+        "stop_name": stop_row["name"],
+        "latitude":  stop_row["latitude"],
+        "longitude": stop_row["longitude"],
+        "scores": {
+            "accessibility": accessibility,
+            "safety":        safety,
+            "punctuality":   punctuality,
+            "experience":    experience,
+            "regularity":    regularity,
+        },
+        "profile_used":     profile,
+        "survey_count":     survey_count,
+        "data_confidence":  "high" if survey_count >= 3 else "medium" if survey_count >= 1 else "low",
+    }
