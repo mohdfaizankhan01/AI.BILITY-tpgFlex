@@ -201,17 +201,26 @@ def _strict_stop_match(name: str, stops: dict) -> str | None:
 
 # ── Mapping: entry dict → (stop_id, block, items) ───────────────────────────────
 
+def _is_feedback_field(key: str) -> bool:
+    """True for the 'Retour d'expérience' ride-feedback field (network-wide)."""
+    n = _norm(key)
+    return any(x in n for x in ("retour", "feedback", "exprience", "experience"))
+
+
 def map_entries(entries: list[dict]) -> tuple[list[tuple], dict]:
     """
     Map raw Epicollect entries to observation rows
     (stop_id, block_type, checked_item, entry_uuid).
-    Each survey value is routed to the scoring block whose weight dict contains
-    it; values that match no block are reported under 'unmatched_vocabulary'.
+    Place observations are attached to their stop; ride-experience feedback (the
+    "Évaluer un trajet" contribution type, which carries no stop) is attached to
+    the network-wide SERVICE bucket. Values matching no block are reported under
+    'unmatched_vocabulary'.
     """
     rows: list[tuple] = []
     matched_stops: set[str] = set()
     unmatched_stops: set[str] = set()
     unmatched_vocab: set[str] = set()
+    service_feedback = 0
 
     if not entries:
         return rows, {"entries": 0, "stops_matched": 0, "stops_unmatched": []}
@@ -228,22 +237,26 @@ def map_entries(entries: list[dict]) -> tuple[list[tuple], dict]:
 
     for e in entries:
         raw_stop = str(e.get(stop_key, "")).strip()
-        if not raw_stop:
-            continue
-        stop_id = raw_stop if raw_stop in stop_ids else _strict_stop_match(raw_stop, stops)
-        if not stop_id:
-            unmatched_stops.add(raw_stop)
-            continue
-        matched_stops.add(stop_id)
+        stop_id = (raw_stop if raw_stop in stop_ids
+                   else _strict_stop_match(raw_stop, stops)) if raw_stop else None
 
         uuid = e.get("ec5_uuid") or e.get("uuid")
         for vk in value_keys:
+            is_feedback = _is_feedback_field(vk)
             for item in parse_epicollect_value(e.get(vk)):
                 block = _route_item(item)
-                if block:
-                    rows.append((stop_id, block, item, uuid))
-                else:
+                if not block:
                     unmatched_vocab.add(item)
+                    continue
+                if is_feedback:
+                    # Ride experience is network-wide — no stop required.
+                    rows.append((_se.SERVICE_STOP_ID, block, item, uuid))
+                    service_feedback += 1
+                elif stop_id:
+                    rows.append((stop_id, block, item, uuid))
+                    matched_stops.add(stop_id)
+                elif raw_stop:
+                    unmatched_stops.add(raw_stop)
 
     return rows, {
         "entries": len(entries),
@@ -252,6 +265,7 @@ def map_entries(entries: list[dict]) -> tuple[list[tuple], dict]:
         "stops_matched": len(matched_stops),
         "stops_unmatched": sorted(unmatched_stops),
         "observations_mapped": len(rows),
+        "ride_feedback_items": service_feedback,
         "unmatched_vocabulary": sorted(unmatched_vocab),
     }
 

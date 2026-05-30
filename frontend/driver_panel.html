@@ -123,6 +123,33 @@ main {
 .req-badge.pending   { background: #7c2d12; color: #fb923c; }
 .req-badge.confirmed { background: #14532d; color: #4ade80; }
 
+/* Passenger readiness cards */
+.req-card.rdy-ready   { border-color: #22c55e; }
+.req-card.rdy-walking { border-color: #3b82f6; }
+.req-card.rdy-waiting { border-color: #f59e0b; }
+.req-card.rdy-assist  { border-color: #ef4444; }
+.rdy-badge {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.rdy-badge.ready   { background: #14532d; color: #4ade80; }
+.rdy-badge.walking { background: #1e3a8a; color: #93c5fd; }
+.rdy-badge.waiting { background: #78350f; color: #fbbf24; }
+.rdy-badge.assist  { background: #7f1d1d; color: #fca5a5; animation: pulse 2s infinite; }
+
+/* Driver wait / depart decision */
+.rdy-actions { display: flex; gap: 8px; }
+.rdy-actions .confirm-btn { padding: 13px; font-size: 14px; }
+.confirm-btn.wait          { background: #2563eb; }
+.confirm-btn.wait:hover    { background: #1d4ed8; }
+.confirm-btn.depart        { background: #dc2626; }
+.confirm-btn.depart:hover  { background: #b91c1c; }
+.confirmed-label.depart    { color: #fca5a5; }
+
 .req-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -313,6 +340,127 @@ async function confirmRamp(reqId) {
   }
 }
 
+// ── Passenger readiness status ────────────────────────────────────────────────
+const readinessCards = {};
+const READINESS = {
+  ready_at_stop:  { icon: "✅", text: "Ready at stop",       cls: "ready"   },
+  walking:        { icon: "🚶", text: "Walking to stop",     cls: "walking" },
+  need_more_time: { icon: "⏳", text: "Needs 2 more minutes", cls: "waiting" },
+  assistance:     { icon: "🆘", text: "Assistance requested", cls: "assist" },
+};
+
+function addReadinessCard(rec) {
+  const empty = document.getElementById("empty-state");
+  if (empty) empty.remove();
+
+  const cfg = READINESS[rec.status] || { icon: "📍", text: rec.label || rec.status, cls: "" };
+  // Delayed passengers (need more time / still walking) get a wait-or-depart choice.
+  const isDelayed = (rec.status === "need_more_time" || rec.status === "walking");
+
+  let actionHtml = "";
+  if (rec.acknowledged) {
+    if (rec.decision === "wait") {
+      actionHtml = `<div class="confirmed-label">⏳ Waiting for passenger</div>`;
+    } else if (rec.decision === "depart") {
+      actionHtml = `<div class="confirmed-label depart">🚐 Departing now</div>`;
+    } else {
+      actionHtml = `<div class="confirmed-label">✅ Acknowledged ${rec.acknowledged_at ? "at " + fmtTime(rec.acknowledged_at) : ""}</div>`;
+    }
+  } else if (isDelayed) {
+    actionHtml = `
+      <div class="rdy-actions">
+        <button class="confirm-btn wait"   onclick="respondReadiness('${rec.booking_id}','wait')">⏳ Wait</button>
+        <button class="confirm-btn depart" onclick="respondReadiness('${rec.booking_id}','depart')">🚐 Depart now</button>
+      </div>`;
+  } else if (rec.status === "assistance") {
+    actionHtml = `<button class="confirm-btn" onclick="acknowledgeReadiness('${rec.booking_id}')">👍 Acknowledge</button>`;
+  }
+
+  const html = `
+    <div class="req-header">
+      <div>
+        <div class="req-title">${cfg.icon} ${cfg.text}</div>
+        <div class="req-sub">${profileLabel(rec.profile)} · Booking ${rec.booking_id}</div>
+      </div>
+      <div class="rdy-badge ${cfg.cls}">${cfg.text}</div>
+    </div>
+    <div class="req-details">
+      <div class="detail-item">
+        <div class="detail-lbl">Stop</div>
+        <div class="detail-val">${rec.stop_name || "—"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-lbl">Vehicle</div>
+        <div class="detail-val">${rec.vehicle_id || "—"}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-lbl">Updated</div>
+        <div class="detail-val" style="font-size:12px">${fmtTime(rec.updated_at)}</div>
+      </div>
+    </div>
+    <div id="rdy-action-${rec.booking_id}">${actionHtml}</div>`;
+
+  let card = readinessCards[rec.booking_id];
+  if (!card) {
+    card = document.createElement("div");
+    card.id = `rdy-card-${rec.booking_id}`;
+    readinessCards[rec.booking_id] = card;
+    document.getElementById("requests-list").prepend(card);
+  }
+  card.className = `req-card rdy-${cfg.cls}`;
+  card.innerHTML = html;
+
+  if (rec.status === "assistance" && !rec.acknowledged) showReadinessAlert(rec);
+}
+
+function updateReadinessCard(rec) {
+  addReadinessCard(rec);   // re-render handles the acknowledged state too
+}
+
+async function acknowledgeReadiness(bookingId) {
+  const btn = document.querySelector(`#rdy-action-${bookingId} .confirm-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+  try {
+    await fetch(`${API}/readiness/${bookingId}/acknowledge`, { method: "POST" });
+    // The broadcast echoes back a readiness_acknowledged that re-renders the card.
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = "👍 Acknowledge"; }
+    alert("Failed to send acknowledgement. Please try again.");
+  }
+}
+
+async function respondReadiness(bookingId, decision) {
+  const wrap = document.getElementById(`rdy-action-${bookingId}`);
+  if (wrap) wrap.querySelectorAll("button").forEach(b => b.disabled = true);
+  try {
+    await fetch(`${API}/readiness/${bookingId}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision })
+    });
+    // The broadcast echoes back a readiness_acknowledged that re-renders the card.
+  } catch (e) {
+    if (wrap) wrap.querySelectorAll("button").forEach(b => b.disabled = false);
+    alert("Failed to send decision. Please try again.");
+  }
+}
+
+function showReadinessAlert(rec) {
+  const banner = document.getElementById("alert-banner");
+  document.getElementById("alert-msg").textContent = `🆘 Assistance requested${rec.stop_name ? " at " + rec.stop_name : ""}`;
+  document.getElementById("alert-sub").textContent =
+    `${rec.vehicle_id ? "Vehicle " + rec.vehicle_id + " · " : ""}${profileLabel(rec.profile)}`;
+  banner.classList.add("visible");
+  setTimeout(() => banner.classList.remove("visible"), 6000);
+
+  if (Notification.permission === "granted") {
+    new Notification("tpgFlex — Assistance Requested", {
+      body: `Passenger needs assistance${rec.stop_name ? " at " + rec.stop_name : ""}`,
+      icon: ""
+    });
+  }
+}
+
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -327,6 +475,8 @@ function connect() {
     try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === "ramp_request")    { addCard(msg.data); showAlert(msg.data); }
     else if (msg.type === "ramp_acknowledged") { updateCardStatus(msg.data); }
+    else if (msg.type === "readiness_update")       { addReadinessCard(msg.data); }
+    else if (msg.type === "readiness_acknowledged") { updateReadinessCard(msg.data); }
   };
 }
 connect();

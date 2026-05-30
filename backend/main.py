@@ -32,6 +32,31 @@ _booking_context: dict[str, dict] = {}
 _ramp_requests: dict[str, dict] = {}
 _driver_clients: list[WebSocket] = []
 
+# Passenger readiness status — latest status per booking_id. A privacy-friendly
+# alternative to live location tracking: the passenger declares their state and
+# the driver panel sees it in real time over /ws/driver.
+_readiness_status: dict[str, dict] = {}
+
+READINESS_LABELS = {
+    "ready_at_stop":  "Ready at stop",
+    "walking":        "Walking to stop",
+    "need_more_time": "Need 2 more minutes",
+    "assistance":     "Request assistance",
+}
+
+
+async def _broadcast_driver(payload: dict) -> None:
+    """Send a JSON payload to every connected driver panel; drop dead sockets."""
+    dead = []
+    for ws in _driver_clients:
+        try:
+            await ws.send_text(json.dumps(payload))
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in _driver_clients:
+            _driver_clients.remove(ws)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -327,6 +352,82 @@ def list_pending_ramp_requests():
     return [r for r in _ramp_requests.values() if r["status"] == "pending"]
 
 
+# ── Passenger readiness status ───────────────────────────────────────────────
+
+class ReadinessBody(BaseModel):
+    booking_id: str
+    status: str                          # ready_at_stop | walking | need_more_time | assistance
+    stop_name: str = ""
+    vehicle_id: str = ""
+    user_id: str = "USR_001"
+    profile: str = "standard"
+
+
+@app.post("/readiness")
+async def set_readiness(req: ReadinessBody):
+    if req.status not in READINESS_LABELS:
+        raise HTTPException(400, f"Unknown status '{req.status}'. Use one of {list(READINESS_LABELS)}")
+    record = {
+        "booking_id":   req.booking_id,
+        "status":       req.status,
+        "label":        READINESS_LABELS[req.status],
+        "stop_name":    req.stop_name,
+        "vehicle_id":   req.vehicle_id,
+        "user_id":      req.user_id,
+        "profile":      req.profile,
+        "acknowledged": False,
+        "decision":     None,            # wait | depart (driver's response)
+        "updated_at":   datetime.now().isoformat(),
+        "acknowledged_at": None,
+    }
+    _readiness_status[req.booking_id] = record
+    await _broadcast_driver({"type": "readiness_update", "data": record})
+    return record
+
+
+@app.get("/readiness")
+def list_readiness():
+    return list(_readiness_status.values())
+
+
+@app.get("/readiness/{booking_id}")
+def get_readiness(booking_id: str):
+    rec = _readiness_status.get(booking_id)
+    if not rec:
+        raise HTTPException(404, "No readiness status for this booking")
+    return rec
+
+
+@app.post("/readiness/{booking_id}/acknowledge")
+async def acknowledge_readiness(booking_id: str):
+    rec = _readiness_status.get(booking_id)
+    if not rec:
+        raise HTTPException(404, "No readiness status for this booking")
+    rec["acknowledged"] = True
+    rec["acknowledged_at"] = datetime.now().isoformat()
+    await _broadcast_driver({"type": "readiness_acknowledged", "data": rec})
+    return rec
+
+
+class ReadinessResponseBody(BaseModel):
+    decision: str   # wait | depart
+
+
+@app.post("/readiness/{booking_id}/respond")
+async def respond_readiness(booking_id: str, body: ReadinessResponseBody):
+    """Driver responds to a delayed passenger: 'wait' for them or 'depart' now."""
+    if body.decision not in ("wait", "depart"):
+        raise HTTPException(400, "decision must be 'wait' or 'depart'")
+    rec = _readiness_status.get(booking_id)
+    if not rec:
+        raise HTTPException(404, "No readiness status for this booking")
+    rec["decision"] = body.decision
+    rec["acknowledged"] = True
+    rec["acknowledged_at"] = datetime.now().isoformat()
+    await _broadcast_driver({"type": "readiness_acknowledged", "data": rec})
+    return rec
+
+
 @app.websocket("/ws/driver")
 async def driver_ws(websocket: WebSocket):
     await websocket.accept()
@@ -336,6 +437,12 @@ async def driver_ws(websocket: WebSocket):
     for r in pending:
         try:
             await websocket.send_text(json.dumps({"type": "ramp_request", "data": r}))
+        except Exception:
+            break
+    # Replay the latest readiness status for each active booking
+    for rec in _readiness_status.values():
+        try:
+            await websocket.send_text(json.dumps({"type": "readiness_update", "data": rec}))
         except Exception:
             break
     try:
@@ -354,7 +461,11 @@ app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 @app.get("/")
 def serve_frontend():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    # no-cache so browsers always pick up the latest UI (avoids stale-page confusion)
+    return FileResponse(
+        os.path.join(FRONTEND_DIR, "index.html"),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 # ── Blind navigation additions ─────────────────────────────────────────────────
@@ -489,6 +600,12 @@ def evaluator_all_stops(profile: str = "all"):
     ).fetchall()
     conn.close()
     return [_se.evaluate_stop(r["stop_id"], profile) for r in rows]
+
+
+@app.get("/api/ride-experience")
+def ride_experience():
+    """Network-wide Ride Experience score, aggregated from all ride feedback."""
+    return _se.evaluate_ride_experience()
 
 
 @app.get("/api/stop-evaluator/{stop_id}")

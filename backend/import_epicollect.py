@@ -198,11 +198,13 @@ def import_csv(csv_path: str) -> dict:
                         if not block:
                             unmatched_vocab.add(item)       # not in any weight dict
                             continue
+                        # Ride experience is network-wide (not tied to a stop).
+                        target = _se.SERVICE_STOP_ID if block == "experience" else stop_id
                         conn.execute(
                             """INSERT INTO stop_observations
                                (stop_id, block_type, checked_item, source, submitted_at)
                                VALUES (?, ?, ?, 'epicollect', ?)""",
-                            (stop_id, block, item, now),
+                            (target, block, item, now),
                         )
                         items_imported += 1
 

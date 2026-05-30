@@ -40,10 +40,14 @@ DEMO_DATA = [
         "Zone scolaire proche",
     ]),
     ("Cornavin", "experience", [
-        "Abri disponible",
-        "Banc disponible",
-        "Zone calme",
-        "Stationnement vélo proche",
+        "Bonne expérience",
+        "Confortable",
+        "Ponctuel",
+        "Véhicule propre",
+        "Je me suis senti en sécurité",
+        "Montée facile",
+        "Annonces sonores fonctionnelles",
+        "Arrêts annoncés clairement",
     ]),
 
     # ── Aïre — rural/isolated, minimal facilities ─────────────────────────────
@@ -58,7 +62,10 @@ DEMO_DATA = [
         "Couverture mobile faible",
         "Route à vitesse élevée (> 50 km/h)",
     ]),
-    ("Aïre", "experience", []),
+    ("Aïre", "experience", [
+        "Attente longue",
+        "Trajet cahoteux",
+    ]),
 
     # ── Bachet-de-Pesay — suburban, mid-tier ─────────────────────────────────
     ("Bachet", "accessibility", [
@@ -71,8 +78,8 @@ DEMO_DATA = [
         "Passage piéton proche",
     ]),
     ("Bachet", "experience", [
-        "Abri disponible",
-        "Banc disponible",
+        "Confortable",
+        "Ponctuel",
     ]),
 
     # ── Hôpital Cantonal — hospital, strong accessibility focus ───────────────
@@ -94,9 +101,12 @@ DEMO_DATA = [
         "Passage piéton proche",
     ]),
     ("Cantonal", "experience", [
-        "Abri disponible",
-        "Banc disponible",
-        "Zone calme",
+        "Serviable",
+        "Accessible",
+        "Rampe utilisée si nécessaire",
+        "Espace fauteuil disponible",
+        "Je me suis senti en sécurité",
+        "Véhicule propre",
     ]),
 
     # ── Nations (UN area) — well-lit, busy, good overall ─────────────────────
@@ -115,9 +125,10 @@ DEMO_DATA = [
         "Commerce ou Hopital-pharmacie proche",
     ]),
     ("Nations", "experience", [
-        "Abri disponible",
-        "Banc disponible",
-        "Stationnement vélo proche",
+        "Bonne expérience",
+        "Ponctuel",
+        "Confortable",
+        "Information visuelle claire",
     ]),
 
     # ── CERN — tech campus, well-maintained but car-centric road ─────────────
@@ -133,9 +144,9 @@ DEMO_DATA = [
         "Route à vitesse élevée (> 50 km/h)",
     ]),
     ("CERN", "experience", [
-        "Abri disponible",
-        "Zone calme",
-        "Stationnement vélo proche",
+        "Confortable",
+        "Ponctuel",
+        "Trajet cahoteux",
     ]),
 
     # ── Vernier-Village — village stop, partial facilities ────────────────────
@@ -149,7 +160,7 @@ DEMO_DATA = [
         "Zone sombre",
     ]),
     ("Vernier", "experience", [
-        "Abri disponible",
+        "Attente longue",
     ]),
 
     # ── Rive — lakeside, scenic but some negatives ────────────────────────────
@@ -166,8 +177,9 @@ DEMO_DATA = [
         "Zone scolaire proche",
     ]),
     ("Rive", "experience", [
-        "Abri disponible",
-        "Banc disponible",
+        "Confortable",
+        "Véhicule surchargé",
+        "Attente longue",
     ]),
 ]
 

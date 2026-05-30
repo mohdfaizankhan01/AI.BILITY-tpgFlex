@@ -2,10 +2,14 @@
 Stop Evaluator — scores each tpgFlex stop across five dimensions using
 Epicollect survey observations stored in stop_observations table.
 
-The survey is a single flat "Observations du lieu" multi-select of 28 canonical
-items (CANONICAL_OBSERVATION_ITEMS below). Every checked item is pooled and
-scored against every dimension; each weight dict only counts the items it lists,
-so one observation (e.g. "Abri disponible") can legitimately lift several scores.
+Two Epicollect forms feed the scores:
+  • "Observations du lieu" — a flat multi-select of place attributes
+    (CANONICAL_OBSERVATION_ITEMS) that drive accessibility (per profile) + safety.
+  • "Retour d'expérience / Quick Tags" — a separate sub-form of rider sentiment
+    about the trip, driving the "🌟 Ride Experience" score (EXPERIENCE_ITEMS).
+
+Every checked item is pooled and scored against every dimension; each weight dict
+only counts the items it lists, so one observation can lift several scores.
 """
 
 import unicodedata
@@ -112,11 +116,33 @@ SAFETY_ITEMS = {
     "Couverture mobile faible": -2,
 }
 
+# Ride-experience feedback — driven by the separate Epicollect "Retour
+# d'expérience / Quick Tags" sub-form (rider sentiment about the trip itself,
+# not the stop's amenities). These are the only items that feed the
+# "🌟 Ride Experience" score.
 EXPERIENCE_ITEMS = {
-    "Abri disponible": 3,
-    "Banc disponible": 2,
-    "Zone calme": 2,
-    "Stationnement vélo proche": 1,
+    # ── Positive tags ──
+    "Bonne expérience": 3,                      # Good experience (overall)
+    "Je me suis senti en sécurité": 3,          # Felt safe during ride
+    "Confortable": 2,                           # Comfortable
+    "Serviable": 2,                             # Helpful (driver)
+    "Accessible": 2,                            # Accessible
+    "Montée facile": 2,                         # Easy boarding
+    "Ponctuel": 2,                              # On time
+    "Rampe utilisée si nécessaire": 2,          # Ramp deployed when needed
+    "Annonces sonores fonctionnelles": 2,       # Audio announcements working
+    "Espace fauteuil disponible": 2,            # Wheelchair space available
+    "Véhicule propre": 2,                       # Clean vehicle
+    "Arrêts annoncés clairement": 2,            # Stops clearly announced
+    "Information visuelle claire": 2,           # Clear visual information
+    "Trajet facile à comprendre": 2,            # Easy to understand ride
+    "Bon éclairage": 1,                         # Good lighting (inside vehicle)
+    # ── Negative tags ──
+    "Attente longue": -2,                       # Long waiting time
+    "Accès difficile": -3,                      # Difficult access
+    "Trajet cahoteux": -2,                      # Bumpy ride
+    "Porte coincée": -3,                        # Door stuck
+    "Véhicule surchargé": -2,                   # Overcrowded vehicle
 }
 
 PROFILE_MAP = {
@@ -288,6 +314,28 @@ def evaluate_experience(checked_items: list[str]) -> dict:
     return score_block(checked_items, EXPERIENCE_ITEMS)
 
 
+# ── Ride experience (network-wide) ────────────────────────────────────────────
+# Ride feedback comes from the Epicollect "Évaluer un trajet / Evaluate ride
+# experience" contribution type, which carries no stop (a ride happens between
+# stops, not at one). So Ride Experience is a single service-wide score computed
+# from ALL experience-tagged observations, and shown on every stop.
+
+SERVICE_STOP_ID = "__SERVICE__"   # synthetic owner for stop-less ride feedback
+
+
+def evaluate_ride_experience() -> dict:
+    """Network-wide Ride Experience score from every experience-tagged observation."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT checked_item FROM stop_observations WHERE block_type = 'experience'"
+    ).fetchall()
+    conn.close()
+    items = [r["checked_item"] for r in rows]
+    result = score_block(items, EXPERIENCE_ITEMS)
+    result["feedback_count"] = len(items)
+    return result
+
+
 # ── Main evaluator ────────────────────────────────────────────────────────────
 
 def evaluate_stop(stop_id: str, profile: str = "all") -> dict:
@@ -326,7 +374,9 @@ def evaluate_stop(stop_id: str, profile: str = "all") -> dict:
 
     accessibility = evaluate_accessibility(checked_items, internal_profile)
     safety        = evaluate_safety(checked_items)
-    experience    = evaluate_experience(checked_items)
+    # Ride experience is network-wide (feedback is not tied to a stop), so every
+    # stop shows the same aggregated Ride Experience score.
+    experience    = evaluate_ride_experience()
 
     punctuality = {"label": "Good", "color": "green", "value": "On time 87%"}
     regularity  = {"label": "Every 15-20 min", "sublabel": "(Usually)", "color": "purple"}
