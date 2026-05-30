@@ -1,0 +1,13 @@
+Drop figure images here, named to match the report:
+
+figure_1_epicollect_setup.png
+figure_2_epicollect_form.png
+figure_3_epicollect_dataset.png
+figure_4_homepage.png
+figure_5_navigate_user.png
+figure_6_navigate_display.png
+figure_7_stop_evaluator.png
+figure_8_profile_setup.png
+figure_9_crowdsource_map.png
+figure_10_site_visits.png
+figure_11_architecture.png
