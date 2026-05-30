@@ -1,15 +1,25 @@
 """
 Epicollect CSV importer for stop_observations.
 
+Mirrors the live API sync (epicollect_sync.py) for offline CSV exports: it reads
+the flat "Observations du lieu" multi-select, strips the bilingual
+'French / English' labels down to the French side, and routes each item to its
+scoring block via stop_evaluator.block_for_item (the single source of truth).
+Legacy three-column exports (accessibility/safety/experience) still import — the
+items are routed by dictionary membership regardless of which column holds them.
+
 Usage:
     python backend/import_epicollect.py path/to/survey.csv
 
 Expected CSV columns (case-insensitive, flexible naming):
-  - stop_id  OR  stop_name       (one required)
-  - latitude, longitude          (optional, used for coord-based stop lookup)
-  - accessibility / safety / experience observations (comma- or semicolon-separated)
+  - stop_id  OR  stop_name                     (one required)
+  - latitude, longitude                        (optional)
+  - one or more observation columns            ("Observations du lieu", or the
+    legacy accessibility/safety/experience columns). Multi-select values may be
+    comma/semicolon-separated or a Python-list-literal string.
 """
 
+import ast
 import csv
 import sys
 import os
@@ -19,18 +29,19 @@ from difflib import get_close_matches
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.database import get_conn
+from backend import stop_evaluator as _se
 
 
 # ── Column detection ───────────────────────────────────────────────────────────
+# The current form is flat: one "Observations du lieu" multi-select (plus the
+# retired "Retour d'expérience" field). We collect every observation column and
+# route each item by weight-dict membership, so column naming no longer dictates
+# the block. Legacy accessibility/safety/experience columns are picked up too.
 
-_BLOCK_ALIASES = {
-    "accessibility": ["accessibility", "accessibility_obs", "1_accessibility",
-                      "accessibilite", "accessibilité"],
-    "safety":        ["safety", "safety_obs", "2_safety", "securite", "sécurité",
-                      "surete", "sûreté"],
-    "experience":    ["experience", "experience_obs", "3_experience", "expérience",
-                      "ride_experience"],
-}
+_VALUE_NEEDLES = ("observation", "observ", "accessib", "safety", "securit",
+                  "surete", "experience", "exprience", "retour", "feedback")
+_META_NEEDLES  = ("uuid", "created", "uploaded", "title", "latitude", "longitude",
+                  "lat", "lon", "photo")
 
 
 def _norm(s: str) -> str:
@@ -42,8 +53,8 @@ def _norm(s: str) -> str:
 
 def detect_columns(headers: list[str]) -> dict:
     """
-    Identify which CSV columns hold stop key and each observation block.
-    Returns: {"stop_key": colname, "blocks": {"accessibility": col, ...}}
+    Identify the stop-key column and every observation column.
+    Returns: {"stop_key": colname, "value_cols": [colname, ...]}
     """
     normed = {h: _norm(h) for h in headers}
 
@@ -60,38 +71,51 @@ def detect_columns(headers: list[str]) -> dict:
                 break
     if not stop_key:
         for h, n in normed.items():
-            if "stop" in n or "arret" in n or "arrêt" in n:
+            if any(x in n for x in ("stop", "arret", "arrt", "nom_de")):
                 stop_key = h
                 break
 
-    # Block columns
-    block_cols: dict[str, str | None] = {b: None for b in _BLOCK_ALIASES}
-    for block, aliases in _BLOCK_ALIASES.items():
-        for h, n in normed.items():
-            if any(a in n for a in aliases):
-                block_cols[block] = h
-                break
-        if not block_cols[block]:
-            # fuzzy fallback
-            matches = get_close_matches(block, list(normed.values()), n=1, cutoff=0.6)
-            if matches:
-                for h, n in normed.items():
-                    if n == matches[0]:
-                        block_cols[block] = h
-                        break
+    # Observation columns — any field that looks like a survey answer.
+    value_cols = [h for h, n in normed.items()
+                  if h != stop_key and any(x in n for x in _VALUE_NEEDLES)]
+    # Fallback: treat every non-meta column as an observation column.
+    if not value_cols:
+        value_cols = [h for h, n in normed.items()
+                      if h != stop_key and not any(x in n for x in _META_NEEDLES)]
 
-    return {"stop_key": stop_key, "blocks": block_cols}
+    return {"stop_key": stop_key, "value_cols": value_cols}
 
 
 # ── Cell parser ────────────────────────────────────────────────────────────────
 
-def parse_cell(cell_value: str) -> list[str]:
-    """Split a multi-value cell on comma or semicolon, strip blanks."""
-    if not cell_value or not cell_value.strip():
+def parse_cell(cell_value) -> list[str]:
+    """Split a multi-value survey cell into canonical French item labels.
+
+    Handles the Epicollect bilingual multi-select format
+    ("Surface dure et stable / Hard stable surface, Pente du chemin / Path slope"),
+    Python-list-literal strings, and plain comma/semicolon lists. The English half
+    (after ' / ') is dropped — the weight dicts key on the French side.
+    """
+    if cell_value is None:
         return []
+    if isinstance(cell_value, list):
+        seq = cell_value
+    else:
+        s = str(cell_value).strip()
+        if not s:
+            return []
+        try:
+            parsed = ast.literal_eval(s)            # "['a / A', ...]" → list
+            seq = parsed if isinstance(parsed, list) else [s]
+        except (ValueError, SyntaxError):
+            seq = s.replace(";", ",").split(",")    # plain CSV fallback
+
     items: list[str] = []
-    for raw in cell_value.replace(";", ",").split(","):
-        item = raw.strip()
+    for raw in seq:
+        item = str(raw).strip()
+        if not item:
+            continue
+        item = item.split(" / ")[0].strip()         # drop the English half
         if item:
             items.append(item)
     return items
@@ -131,6 +155,7 @@ def import_csv(csv_path: str) -> dict:
     items_imported = 0
     stops_matched: set[str] = set()
     stops_unmatched: list[str] = []
+    unmatched_vocab: set[str] = set()
 
     now = datetime.now().isoformat()
 
@@ -139,7 +164,7 @@ def import_csv(csv_path: str) -> dict:
         headers = reader.fieldnames or []
         mapping = detect_columns(headers)
         stop_key = mapping["stop_key"]
-        block_cols = mapping["blocks"]
+        value_cols = mapping["value_cols"]
 
         if not stop_key:
             return {
@@ -151,7 +176,7 @@ def import_csv(csv_path: str) -> dict:
         try:
             for row in reader:
                 rows_processed += 1
-                raw_stop = row.get(stop_key, "").strip()
+                raw_stop = (row.get(stop_key) or "").strip()
                 if not raw_stop:
                     continue
 
@@ -167,11 +192,12 @@ def import_csv(csv_path: str) -> dict:
 
                 stops_matched.add(stop_id)
 
-                for block, col in block_cols.items():
-                    if not col:
-                        continue
-                    cell = row.get(col, "")
-                    for item in parse_cell(cell):
+                for col in value_cols:
+                    for item in parse_cell(row.get(col, "")):
+                        block = _se.block_for_item(item)   # route by dict membership
+                        if not block:
+                            unmatched_vocab.add(item)       # not in any weight dict
+                            continue
                         conn.execute(
                             """INSERT INTO stop_observations
                                (stop_id, block_type, checked_item, source, submitted_at)
@@ -189,6 +215,8 @@ def import_csv(csv_path: str) -> dict:
         "items_imported":  items_imported,
         "stops_matched":   len(stops_matched),
         "stops_unmatched": list(set(stops_unmatched)),
+        "value_columns":   value_cols,
+        "unmatched_vocabulary": sorted(unmatched_vocab),
     }
 
 
@@ -209,5 +237,8 @@ if __name__ == "__main__":
     print(f"Rows processed : {result['rows_processed']}")
     print(f"Items imported : {result['items_imported']}")
     print(f"Stops matched  : {result['stops_matched']}")
+    print(f"Value columns  : {result['value_columns']}")
     if result["stops_unmatched"]:
         print(f"Stops unmatched: {result['stops_unmatched']}")
+    if result["unmatched_vocabulary"]:
+        print(f"Unmatched vocab: {result['unmatched_vocabulary']}")

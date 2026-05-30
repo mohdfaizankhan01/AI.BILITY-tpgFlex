@@ -34,20 +34,15 @@ DEMO_DATA = [
         "Signalétique à fort contraste visuel",
     ]),
     ("Cornavin", "safety", [
-        "Éclairage public présent",
-        "Éclairage suffisant la nuit",
-        "Zone fréquentée (passants réguliers)",
-        "Commerce ou pharmacie proche",
+        "Éclairage suffisant",
+        "Commerce ou Hopital-pharmacie proche",
         "Passage piéton proche",
-        "Visibilité réciproque conducteur-piéton",
-        "Habitation à moins de 200m",
+        "Zone scolaire proche",
     ]),
     ("Cornavin", "experience", [
         "Abri disponible",
         "Banc disponible",
-        "Poubelle disponible",
         "Zone calme",
-        "Point de repère agréable",
         "Stationnement vélo proche",
     ]),
 
@@ -72,8 +67,7 @@ DEMO_DATA = [
         "Affichage temps réel (PID)",
     ]),
     ("Bachet", "safety", [
-        "Éclairage public présent",
-        "Habitation à moins de 200m",
+        "Éclairage suffisant",
         "Passage piéton proche",
     ]),
     ("Bachet", "experience", [
@@ -95,10 +89,8 @@ DEMO_DATA = [
         "Pictogrammes universels",
     ]),
     ("Cantonal", "safety", [
-        "Éclairage public présent",
-        "Éclairage suffisant la nuit",
-        "Zone fréquentée (passants réguliers)",
-        "Visibilité réciproque conducteur-piéton",
+        "Éclairage suffisant",
+        "Commerce ou Hopital-pharmacie proche",
         "Passage piéton proche",
     ]),
     ("Cantonal", "experience", [
@@ -118,16 +110,13 @@ DEMO_DATA = [
         "Signalétique à fort contraste visuel",
     ]),
     ("Nations", "safety", [
-        "Éclairage public présent",
-        "Éclairage suffisant la nuit",
-        "Zone fréquentée (passants réguliers)",
+        "Éclairage suffisant",
         "Passage piéton proche",
-        "Visibilité réciproque conducteur-piéton",
+        "Commerce ou Hopital-pharmacie proche",
     ]),
     ("Nations", "experience", [
         "Abri disponible",
         "Banc disponible",
-        "Poubelle disponible",
         "Stationnement vélo proche",
     ]),
 
@@ -140,9 +129,8 @@ DEMO_DATA = [
         "Signalétique à fort contraste visuel",
     ]),
     ("CERN", "safety", [
-        "Éclairage public présent",
+        "Éclairage suffisant",
         "Route à vitesse élevée (> 50 km/h)",
-        "Visibilité réciproque conducteur-piéton",
     ]),
     ("CERN", "experience", [
         "Abri disponible",
@@ -157,8 +145,7 @@ DEMO_DATA = [
         "Pente du chemin",
     ]),
     ("Vernier", "safety", [
-        "Éclairage public présent",
-        "Habitation à moins de 200m",
+        "Éclairage suffisant",
         "Zone sombre",
     ]),
     ("Vernier", "experience", [
@@ -174,16 +161,13 @@ DEMO_DATA = [
         "Obstacles dans la zone d'attente",
     ]),
     ("Rive", "safety", [
-        "Éclairage public présent",
-        "Zone fréquentée (passants réguliers)",
         "Passage piéton proche",
-        "Commerce ou pharmacie proche",
+        "Commerce ou Hopital-pharmacie proche",
+        "Zone scolaire proche",
     ]),
     ("Rive", "experience", [
         "Abri disponible",
         "Banc disponible",
-        "Point de repère agréable",
-        "Plusieurs zones d'attente confuses",
     ]),
 ]
 

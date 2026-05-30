@@ -159,26 +159,12 @@ def parse_epicollect_value(raw) -> list[str]:
 
 
 # ── Block routing via the model's own weight dictionaries ───────────────────────
-# The weight dicts in stop_evaluator are the single source of truth, so we route
-# each observed item to the block(s) whose dictionary actually contains it.
-
-def _build_block_index() -> dict[str, str]:
-    """normalized item label → block_type ('accessibility'|'safety'|'experience')."""
-    index: dict[str, str] = {}
-    for weights in _se.PROFILE_MAP.values():
-        for item in weights:
-            index[_se.normalize_label(item)] = "accessibility"
-    for item in _se.SAFETY_ITEMS:
-        index[_se.normalize_label(item)] = "safety"
-    for item in _se.EXPERIENCE_ITEMS:
-        index.setdefault(_se.normalize_label(item), "experience")
-    return index
-
-_BLOCK_INDEX = _build_block_index()
-
+# stop_evaluator.block_for_item is the single source of truth — it routes each
+# observed item to the block whose weight dict contains it (shared with the CSV
+# importer so the mapping can never drift between the two ingest paths).
 
 def _route_item(item: str) -> str | None:
-    return _BLOCK_INDEX.get(_se.normalize_label(item))
+    return _se.block_for_item(item)
 
 
 def _find_field(keys: list[str], *needles: str) -> str | None:

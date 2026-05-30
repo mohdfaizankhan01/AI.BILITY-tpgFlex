@@ -1,10 +1,52 @@
 """
 Stop Evaluator — scores each tpgFlex stop across five dimensions using
 Epicollect survey observations stored in stop_observations table.
+
+The survey is a single flat "Observations du lieu" multi-select of 28 canonical
+items (CANONICAL_OBSERVATION_ITEMS below). Every checked item is pooled and
+scored against every dimension; each weight dict only counts the items it lists,
+so one observation (e.g. "Abri disponible") can legitimately lift several scores.
 """
 
 import unicodedata
 from backend.database import get_conn
+
+# ── Canonical survey vocabulary ────────────────────────────────────────────────
+# The 28 items of the current Epicollect "Observations du lieu" form (French
+# side — the side parse_epicollect_value keeps). Every item below must appear in
+# at least one weight dict, otherwise it is dropped as "unmatched_vocabulary" on
+# sync. This list is the contract between the survey and the scorer.
+
+CANONICAL_OBSERVATION_ITEMS = [
+    "Surface dure et stable",
+    "Pente du chemin",
+    "Bordure abaissée présente",
+    "Embarquement de plain-pied avec le véhicule",
+    "Espace suffisant pour manœuvrer un fauteuil",
+    "Surface meuble ou irrégulière",
+    "Forte pente",
+    "Obstacles dans la zone d'attente",
+    "Bandes podotactiles de guidage",
+    "Bandes podotactiles d'éveil au bord",
+    "Signalétique à fort contraste visuel",
+    "Nom de l'arrêt clairement visible et lisible",
+    "Information en braille",
+    "Affichage temps réel (PID)",
+    "Pictogrammes universels",
+    "Plan du réseau",
+    "Éclairage suffisant",
+    "Passage piéton proche",
+    "Commerce ou Hopital-pharmacie proche",
+    "Zone sombre",
+    "Zone isolée",
+    "Route à vitesse élevée (> 50 km/h)",
+    "Couverture mobile faible",
+    "Zone scolaire proche",
+    "Abri disponible",
+    "Banc disponible",
+    "Zone calme",
+    "Stationnement vélo proche",
+]
 
 # ── Item weight dictionaries ───────────────────────────────────────────────────
 
@@ -60,37 +102,21 @@ ELDERLY_ITEMS = {
 }
 
 SAFETY_ITEMS = {
-    "Éclairage public présent": 3,
-    "Éclairage suffisant la nuit": 3,
-    "Zone fréquentée (passants réguliers)": 2,
-    "Habitation à moins de 200m": 2,
-    "Commerce ou pharmacie proche": 2,
-    "Visibilité réciproque conducteur-piéton": 3,
+    "Éclairage suffisant": 3,
     "Passage piéton proche": 2,
+    "Commerce ou Hopital-pharmacie proche": 2,
+    "Zone scolaire proche": 1,           # daytime activity / passive surveillance
     "Zone sombre": -3,
     "Zone isolée": -3,
-    "Couverture mobile faible": -2,
     "Route à vitesse élevée (> 50 km/h)": -3,
+    "Couverture mobile faible": -2,
 }
 
 EXPERIENCE_ITEMS = {
     "Abri disponible": 3,
     "Banc disponible": 2,
-    "Poubelle disponible": 1,
     "Zone calme": 2,
-    "Point de repère agréable": 1,
     "Stationnement vélo proche": 1,
-    "Plusieurs zones d'attente confuses": -3,
-    # Rider-sentiment vocabulary from the Epicollect "Retour d'expérience" survey
-    # (accent-insensitive; matched via normalize_label). Tune weights as needed.
-    "Serviable": 2,            # Helpful
-    "Accessible": 2,           # Accessible
-    "Ponctuel": 2,             # On time
-    "Confortable": 2,          # Comfortable
-    "Montée facile": 2,        # Easy boarding
-    "Bon éclairage": 1,        # Good lighting (inside vehicle)
-    "Attente longue": -2,      # Long waiting time
-    "Accès difficile": -3,     # Difficult access
 }
 
 PROFILE_MAP = {
@@ -147,11 +173,45 @@ _maybe_seed_demo()
 # ── Core helpers ──────────────────────────────────────────────────────────────
 
 def normalize_label(text: str) -> str:
-    """Lowercase, strip whitespace, drop accent diacritics, truncate at 30 chars."""
+    """Lowercase, strip whitespace, drop accent diacritics, truncate at 30 chars.
+
+    Also folds the small/fullwidth greater-than variants (﹥ U+FE65, ＞ U+FF1E)
+    that the live Epicollect form uses down to ASCII '>', so survey labels like
+    "Route à vitesse élevée (﹥ 50 km/h)" match the weight-dict key exactly (the
+    sync routes items by exact normalized lookup, not prefix overlap).
+    """
     text = text.strip().lower()
+    text = text.replace("﹥", ">").replace("＞", ">")
     text = unicodedata.normalize("NFD", text)
     text = "".join(c for c in text if unicodedata.category(c) != "Mn")
     return text[:30]
+
+
+# ── Item → block routing (single source of truth) ──────────────────────────────
+# The new survey is one flat observation list, so each item must be routed to a
+# scoring block by which weight dict contains it — not by its survey column.
+# Precedence: profile dicts → accessibility, then safety overrides, then
+# experience fills any remaining gaps. Both the CSV importer and the API sync
+# route through block_for_item() so the mapping can never drift between them.
+
+def _build_block_index() -> dict[str, str]:
+    index: dict[str, str] = {}
+    for weights in PROFILE_MAP.values():
+        for item in weights:
+            index[normalize_label(item)] = "accessibility"
+    for item in SAFETY_ITEMS:
+        index[normalize_label(item)] = "safety"
+    for item in EXPERIENCE_ITEMS:
+        index.setdefault(normalize_label(item), "experience")
+    return index
+
+BLOCK_INDEX = _build_block_index()
+
+
+def block_for_item(item: str) -> str | None:
+    """Scoring block ('accessibility'|'safety'|'experience') that owns this
+    observation item, or None if it matches no weight dict (unmatched vocabulary)."""
+    return BLOCK_INDEX.get(normalize_label(item))
 
 
 def score_block(checked_items: list[str], item_weights: dict) -> dict:
@@ -250,15 +310,12 @@ def evaluate_stop(stop_id: str, profile: str = "all") -> dict:
 
     survey_count = len(obs_rows)
 
-    blocks: dict[str, list[str]] = {
-        "accessibility": [],
-        "safety": [],
-        "experience": [],
-    }
-    for row in obs_rows:
-        bt = row["block_type"]
-        if bt in blocks:
-            blocks[bt].append(row["checked_item"])
+    # The survey is a single flat observation list, so every checked item is
+    # pooled and scored against every dimension. score_block() only counts the
+    # items present in each weight dict, so an observation that is relevant to
+    # several dimensions (e.g. "Abri disponible") correctly lifts each of them.
+    # block_type is retained in the DB for provenance only and is not used here.
+    checked_items = [row["checked_item"] for row in obs_rows]
 
     # Map UI profile names → internal profile keys
     _profile_alias = {
@@ -267,9 +324,9 @@ def evaluate_stop(stop_id: str, profile: str = "all") -> dict:
     }
     internal_profile = _profile_alias.get(profile, profile)
 
-    accessibility = evaluate_accessibility(blocks["accessibility"], internal_profile)
-    safety        = evaluate_safety(blocks["safety"])
-    experience    = evaluate_experience(blocks["experience"])
+    accessibility = evaluate_accessibility(checked_items, internal_profile)
+    safety        = evaluate_safety(checked_items)
+    experience    = evaluate_experience(checked_items)
 
     punctuality = {"label": "Good", "color": "green", "value": "On time 87%"}
     regularity  = {"label": "Every 15-20 min", "sublabel": "(Usually)", "color": "purple"}
