@@ -81,6 +81,16 @@ EXPERIENCE_ITEMS = {
     "Point de repère agréable": 1,
     "Stationnement vélo proche": 1,
     "Plusieurs zones d'attente confuses": -3,
+    # Rider-sentiment vocabulary from the Epicollect "Retour d'expérience" survey
+    # (accent-insensitive; matched via normalize_label). Tune weights as needed.
+    "Serviable": 2,            # Helpful
+    "Accessible": 2,           # Accessible
+    "Ponctuel": 2,             # On time
+    "Confortable": 2,          # Comfortable
+    "Montée facile": 2,        # Easy boarding
+    "Bon éclairage": 1,        # Good lighting (inside vehicle)
+    "Attente longue": -2,      # Long waiting time
+    "Accès difficile": -3,     # Difficult access
 }
 
 PROFILE_MAP = {

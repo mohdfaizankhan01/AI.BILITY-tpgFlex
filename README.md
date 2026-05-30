@@ -95,6 +95,46 @@ tpgflex-voice/
 
 ---
 
+## Automated Epicollect survey sync
+
+Stop scores are computed live from the `stop_observations` table — there is **no
+model to retrain**. New community survey responses just need to land in that table,
+and `backend/epicollect_sync.py` pulls them straight from the
+[Epicollect5 API](https://five.epicollect.net/project/crowdsense):
+
+```bash
+python -m backend.epicollect_sync            # fetch + refresh scores
+python -m backend.epicollect_sync --dry-run  # preview, no DB write
+```
+
+Or trigger over HTTP (handy for a cron job):
+
+```bash
+curl -X POST http://localhost:8000/api/stop-evaluator/sync
+```
+
+What it does each run (idempotent):
+1. Fetches all entries (public project; OAuth2 for private — see env below).
+2. Auto-creates any unknown survey stop, geocoding its name via OpenStreetMap.
+3. Parses the bilingual `['Surface dure et stable / Hard stable surface', …]` answers.
+4. Routes each item to its scoring block using the weight dicts in `stop_evaluator.py`
+   (the single source of truth).
+5. Replaces all `source='epicollect'` rows — demo/manual observations are preserved,
+   edits & deletions are reflected, nothing is duplicated.
+
+**Hands-off polling** — set `EPICOLLECT_AUTO_SYNC=1` and the backend re-syncs on a
+timer (default 60 min). Or schedule the `curl` above with cron.
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `EPICOLLECT_PROJECT_SLUG` | `crowdsense` | Epicollect project slug |
+| `EPICOLLECT_CLIENT_ID` / `_CLIENT_SECRET` | – | OAuth2 creds (private projects only) |
+| `EPICOLLECT_AUTO_SYNC` | `0` | `1` enables the background poller |
+| `EPICOLLECT_SYNC_INTERVAL_MIN` | `60` | Poll interval (minutes) |
+| `EPICOLLECT_AUTO_CREATE_STOPS` | `1` | Geocode + insert unknown survey stops |
+
+---
+
 ## Switching to real tpgFlex data
 
 1. Replace `backend/database.py` with the real connector:

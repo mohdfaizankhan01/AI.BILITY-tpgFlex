@@ -507,6 +507,24 @@ class ObservationRow(BaseModel):
     source: str = "manual"
 
 
+@app.post("/api/stop-evaluator/sync")
+async def sync_epicollect(dry_run: bool = False):
+    """Pull the latest Epicollect survey entries and refresh stop scores.
+    Idempotent: replaces source='epicollect' observations; demo/manual rows kept.
+    Trigger manually, from a cron job, or enable the background poller via env."""
+    from backend import epicollect_sync
+    result = await epicollect_sync.sync(dry_run=dry_run)
+    if not result.get("ok"):
+        raise HTTPException(502, result.get("error", "Epicollect sync failed"))
+    return result
+
+
+@app.on_event("startup")
+async def _start_epicollect_poller():
+    from backend import epicollect_sync
+    epicollect_sync.start_background_sync()
+
+
 @app.post("/api/stop-evaluator/observations")
 def add_observations(rows: list[ObservationRow]):
     """Bulk-insert observation rows (for testing without a CSV file)."""
